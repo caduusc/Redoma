@@ -1,10 +1,19 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { supabase } from '../lib/supabase';
 import Logo from '../components/Logo';
 import { LayoutGrid, AlertCircle, Loader2 } from 'lucide-react';
+
+const getOrCreateClientToken = () => {
+  const existing = localStorage.getItem('redoma_client_token');
+  if (existing) return existing;
+
+  // token simples e suficiente pro seu caso (anon). Pode trocar por crypto.randomUUID() se quiser.
+  const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  localStorage.setItem('redoma_client_token', token);
+  return token;
+};
 
 const ClientStart: React.FC = () => {
   const [communityId, setCommunityId] = useState('');
@@ -21,15 +30,16 @@ const ClientStart: React.FC = () => {
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedId = communityId.trim().toLowerCase();
-    
     if (!normalizedId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      // 1. Validar comunidade no Supabase
-      // A política de RLS já deve garantir que apenas isActive=true sejam visíveis
+      // 0) Garantir que o clientToken existe ANTES de qualquer request/insert
+      getOrCreateClientToken();
+
+      // 1) Validar comunidade
       const { data, error: sbError } = await supabase
         .from('communities')
         .select('id')
@@ -39,20 +49,22 @@ const ClientStart: React.FC = () => {
       if (sbError) throw sbError;
 
       if (!data) {
-        setError("O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato via WhatsApp no numero 11 95825-8734");
-        setLoading(false);
+        setError(
+          'O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato no numero 11 97189-1760'
+        );
         return;
       }
 
-      // 2. Prosseguir com o fluxo original se a comunidade existir
-      const convId = await createConversation(normalizedId);
+      // 2) Prosseguir
       localStorage.setItem('redoma_client_cid', normalizedId);
-      localStorage.setItem('redoma_client_token', Math.random().toString(36).substring(7));
+
+      const convId = await createConversation(normalizedId);
       localStorage.setItem('redoma_active_conv', convId);
+
       navigate('/client/chat');
     } catch (err) {
-      console.error("Erro na validação:", err);
-      setError("Não foi possível validar agora. Tente novamente.");
+      console.error('Erro na validação:', err);
+      setError('Não foi possível validar agora. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -60,7 +72,6 @@ const ClientStart: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-redoma-light flex flex-col items-center justify-center p-6 relative overflow-hidden">
-      {/* Subtler decorative background glow */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px]" />
 
@@ -68,11 +79,13 @@ const ClientStart: React.FC = () => {
         <div className="p-10 bg-redoma-dark text-white text-center">
           <Logo size={80} className="mb-6 drop-shadow-xl" />
           <h1 className="text-3xl font-bold tracking-tight">Redoma Tech</h1>
-          <p className="text-redoma-glow text-sm mt-3 font-medium">Crescimento Inteligente para comunidades</p>
+          <p className="text-redoma-glow text-sm mt-3 font-medium">
+            Crescimento Inteligente para comunidades
+          </p>
         </div>
-        
+
         <div className="px-10 py-6 border-b border-slate-50 bg-slate-50/30">
-          <button 
+          <button
             onClick={() => navigate('/client/providers')}
             className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
           >
@@ -83,7 +96,12 @@ const ClientStart: React.FC = () => {
 
         <form onSubmit={handleStart} className="p-10 space-y-6 pt-6">
           <div className="space-y-2">
-            <label htmlFor="community" className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">ID da Comunidade</label>
+            <label
+              htmlFor="community"
+              className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1"
+            >
+              ID da Comunidade
+            </label>
             <input
               id="community"
               type="text"
@@ -91,7 +109,11 @@ const ClientStart: React.FC = () => {
               value={communityId}
               onChange={handleInputChange}
               disabled={loading}
-              className={`w-full px-5 py-4 rounded-2xl border ${error ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-slate-50/50'} focus:ring-2 ${error ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'} focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
+              className={`w-full px-5 py-4 rounded-2xl border ${
+                error ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-slate-50/50'
+              } focus:ring-2 ${
+                error ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'
+              } focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
               required
             />
             {error && (
@@ -103,7 +125,7 @@ const ClientStart: React.FC = () => {
               </div>
             )}
           </div>
-          
+
           <button
             type="submit"
             disabled={loading || !communityId.trim()}
@@ -118,23 +140,24 @@ const ClientStart: React.FC = () => {
               <span>Iniciar Atendimento</span>
             )}
           </button>
-          
+
           <p className="text-center text-[11px] text-slate-400 leading-relaxed font-medium">
-            Conectando você à rede de suporte Redoma.<br/>
+            Conectando você à rede de suporte Redoma.
+            <br />
             Segurança e agilidade para sua comunidade.
           </p>
         </form>
       </div>
-      
+
       <div className="mt-8 flex gap-6">
-        <button 
+        <button
           onClick={() => navigate('/agent/login')}
           className="text-redoma-steel font-bold hover:text-redoma-dark transition-colors text-[10px] uppercase tracking-widest"
         >
           Acesso Suporte
         </button>
         <div className="w-px h-3 bg-slate-300 mt-0.5" />
-        <button 
+        <button
           onClick={() => navigate('/admin/login')}
           className="text-redoma-steel font-bold hover:text-redoma-dark transition-colors text-[10px] uppercase tracking-widest"
         >

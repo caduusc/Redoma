@@ -14,6 +14,7 @@ const AgentLogin: React.FC = () => {
     setLoading(true);
 
     try {
+      // 1) Login real
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -21,17 +22,48 @@ const AgentLogin: React.FC = () => {
 
       if (error) {
         console.error('Supabase login error:', error);
-        alert(`Erro ao fazer login: ${error.message}`);
+        alert('E-mail ou senha inválidos.');
         return;
       }
 
-      // Sanity check
-      if (!data.session) {
-        alert('Não foi possível criar sessão. Tente novamente.');
+      const userId = data.user?.id;
+      if (!userId) {
+        await supabase.auth.signOut();
+        alert('Sessão inválida. Tente novamente.');
         return;
       }
 
-      // Agora existe sessão/token (vai aparecer no Storage)
+      // 2) Validação por whitelist (admin_users)
+      const { data: adminUser, error: adminErr } = await supabase
+        .from('admin_users')
+        .select('user_id')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (adminErr) {
+        console.error('Admin check error:', adminErr);
+        await supabase.auth.signOut();
+        alert('Erro ao validar permissão. Tente novamente.');
+        return;
+      }
+
+      if (!adminUser) {
+        await supabase.auth.signOut();
+        alert('Acesso negado. Usuário não autorizado.');
+        return;
+      }
+
+      // 3) Marca como agente no app (isso ativa isAgent no ChatContext)
+      localStorage.setItem(
+        'redoma_current_user',
+        JSON.stringify({
+          id: userId,
+          name: 'Atendente Redoma',
+          email,
+          role: 'agent',
+        })
+      );
+
       navigate('/agent/inbox');
     } catch (err) {
       console.error('Unexpected login error:', err);

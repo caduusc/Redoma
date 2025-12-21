@@ -1,53 +1,33 @@
 import { createClient } from '@supabase/supabase-js';
 
-// ⚠️ Em produção, o ideal é usar variáveis de ambiente.
-// Mantive hardcoded porque você está assim hoje.
-const supabaseUrl = 'https://wjpkvdkmkoojjmnjdtnk.supabase.co';
-const supabaseAnonKey = 'sb_publishable_9tyk3EMUSLUy3VkK9yypaQ_NWRYPmUl';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
-// Token anônimo para “amarrar” o cliente à própria conversa (RLS via header)
-const CLIENT_TOKEN_KEY = 'redoma_client_token';
-
-function getOrCreateClientToken(): string {
-  try {
-    let token = localStorage.getItem(CLIENT_TOKEN_KEY);
-
-    if (!token) {
-      // Preferir UUID nativo quando disponível
-      if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-        token = crypto.randomUUID();
-      } else {
-        // Fallback simples (ainda suficientemente aleatório para uso de sessão)
-        token =
-          Math.random().toString(36).slice(2) +
-          Math.random().toString(36).slice(2) +
-          Date.now().toString(36);
-      }
-
-      localStorage.setItem(CLIENT_TOKEN_KEY, token);
-    }
-
-    return token;
-  } catch {
-    // Se localStorage não estiver disponível por algum motivo,
-    // ainda geramos um token em memória (sessão frágil, mas não quebra o app).
-    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-      return crypto.randomUUID();
-    }
-    return Math.random().toString(36).slice(2) + Date.now().toString(36);
-  }
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing Supabase env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY'
+  );
 }
 
-// Criamos o client_token uma vez e mandamos em todas as requests
-const clientToken = getOrCreateClientToken();
+/**
+ * Custom fetch que injeta x-client-token em toda requisição.
+ * Ele lê do localStorage na hora da request (não só no boot).
+ */
+const fetchWithClientToken: typeof fetch = async (input, init) => {
+  const headers = new Headers(init?.headers || {});
+
+  try {
+    const token = localStorage.getItem('redoma_client_token');
+    if (token) headers.set('x-client-token', token);
+  } catch {
+    // ignore (SSR / ambientes sem localStorage)
+  }
+
+  return fetch(input, { ...init, headers });
+};
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
-    headers: {
-      'x-client-token': clientToken,
-    },
+    fetch: fetchWithClientToken,
   },
 });
-
-// (Opcional) exportar o token para usar nos inserts de conversations/messages
-export const getClientToken = () => clientToken;
