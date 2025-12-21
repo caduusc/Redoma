@@ -11,6 +11,7 @@ import AgentChat from './pages/AgentChat';
 import AdminLogin from './pages/AdminLogin';
 import AdminProviders from './pages/AdminProviders';
 import AdminGuard from './components/AdminGuard';
+import SupportGuard from './components/SupportGuard';
 
 const App: React.FC = () => {
   return (
@@ -23,28 +24,35 @@ const App: React.FC = () => {
             <Route path="/client/chat" element={<ClientChat />} />
             <Route path="/client/providers" element={<ClientProviders />} />
 
-            {/* Agent Routes */}
+            {/* Support (Agent) Routes */}
             <Route path="/agent/login" element={<AgentLogin />} />
             <Route
               path="/agent/inbox"
               element={
-                <AdminGuard redirectTo="/agent/login">
+                <SupportGuard redirectTo="/agent/login">
                   <AgentInbox />
-                </AdminGuard>
+                </SupportGuard>
               }
             />
             <Route
               path="/agent/chat/:conversationId"
               element={
-                <AdminGuard redirectTo="/agent/login">
+                <SupportGuard redirectTo="/agent/login">
                   <AgentChat />
-                </AdminGuard>
+                </SupportGuard>
               }
             />
 
-            {/* Admin Routes */}
+            {/* Master Admin Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/admin/providers" element={<AdminProviders />} />
+            <Route
+              path="/admin/providers"
+              element={
+                <AdminGuard redirectTo="/admin/login">
+                  <AdminProviders />
+                </AdminGuard>
+              }
+            />
 
             {/* Redirects */}
             <Route path="/" element={<Navigate to="/client/start" replace />} />
