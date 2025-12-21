@@ -73,9 +73,10 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     fetchProviders();
 
     // Subscribe to provider changes
+    // Fixed: Added schema: 'public' and used type casting to match Supabase Realtime overloads
     const subscription = supabase
       .channel('providers_channel')
-      .on('postgres_changes', { event: '*', table: 'providers' }, () => {
+      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'providers' }, () => {
         // Refresh full list on any change for simplicity in admin CRUD
         supabase.from('providers').select('*').then(({ data }) => {
           if (data) setProviders(data);

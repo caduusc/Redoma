@@ -39,9 +39,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
 
     // Subscribe to conversations changes
+    // Fixed: Added schema: 'public' and used type casting to match Supabase Realtime overloads
     const convSubscription = supabase
       .channel('conversations_channel')
-      .on('postgres_changes', { event: '*', table: 'conversations' }, (payload) => {
+      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'conversations' }, (payload: any) => {
         if (payload.eventType === 'INSERT') {
           setConversations(prev => [...prev, payload.new as Conversation]);
         } else if (payload.eventType === 'UPDATE') {
@@ -51,9 +52,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .subscribe();
 
     // Subscribe to messages changes
+    // Fixed: Added schema: 'public' and used type casting to match Supabase Realtime overloads
     const msgSubscription = supabase
       .channel('messages_channel')
-      .on('postgres_changes', { event: 'INSERT', table: 'messages' }, (payload) => {
+      .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'messages' }, (payload: any) => {
         setMessages(prev => [...prev, payload.new as Message]);
       })
       .subscribe();

@@ -44,17 +44,12 @@ const ClientProviders: React.FC = () => {
             Voltar
           </button>
           
-          <h1 className="text-4xl font-extrabold mb-4 tracking-tight">Ecosystem de Benefícios</h1>
+          <h1 className="text-4xl font-extrabold mb-4 tracking-tight">Ecossistema de Benefícios</h1>
           <p className="text-redoma-glow/80 max-w-2xl text-lg font-medium leading-relaxed">
-            Sua comunidade gera impacto. Utilize os parceiros credenciados Redoma e gere receita automática para a sua comunidade.
+            Utilize os parceiros credenciados Redoma e gere receita automática para a sua comunidade.
           </p>
           
-          <div className="mt-8 inline-flex items-center gap-3 bg-white/5 border border-white/10 px-4 py-2 rounded-2xl backdrop-blur-sm">
-            <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-            <span className="text-xs font-bold text-white uppercase tracking-widest">
-              Comunidade: <span className="text-redoma-star ml-1">{communityId || 'Identificação Pendente'}</span>
-            </span>
-          </div>
+          
         </div>
       </header>
 
