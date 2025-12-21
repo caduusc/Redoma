@@ -52,8 +52,8 @@ const AdminLogin: React.FC = () => {
         return;
       }
 
-      // ✅ OK — é admin
-      navigate('/admin/providers');
+      // 2A) Navegação mais segura (evita "voltar" pro login e ajuda a não parecer reload)
+      navigate('/admin/providers', { replace: true });
     } catch (err) {
       console.error(err);
       alert('Erro inesperado ao tentar acessar o painel.');
@@ -61,6 +61,9 @@ const AdminLogin: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // 2B) (Importante) Não usar mais localStorage "redoma_admin_session" no master.
+  // O master é: Supabase Auth + whitelist em admin_users.
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6">

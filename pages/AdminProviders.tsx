@@ -1,18 +1,14 @@
-
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import { useProviders } from '../context/ProviderContext';
 import AdminLayout from '../components/AdminLayout';
 import { Provider } from '../types';
-import { Plus, Edit2, Trash2, Power, Globe, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Power, CheckCircle2, XCircle } from 'lucide-react';
 
 const AdminProviders: React.FC = () => {
-  const navigate = useNavigate();
   const { providers, addProvider, updateProvider, deleteProvider, toggleActive } = useProviders();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
 
-  // Form state
   const [formData, setFormData] = useState<Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>>({
     name: '',
     type: 'ecommerce',
@@ -21,15 +17,8 @@ const AdminProviders: React.FC = () => {
     cashbackPercent: 0,
     revenueShareText: '',
     link: '',
-    isActive: true
+    isActive: true,
   });
-
-  useEffect(() => {
-    const session = localStorage.getItem('redoma_admin_session');
-    if (session !== 'true') {
-      navigate('/admin/login');
-    }
-  }, [navigate]);
 
   const handleOpenModal = (p: Provider | null = null) => {
     if (p) {
@@ -45,7 +34,7 @@ const AdminProviders: React.FC = () => {
         cashbackPercent: 0,
         revenueShareText: '',
         link: '',
-        isActive: true
+        isActive: true,
       });
     }
     setIsModalOpen(true);
@@ -66,9 +55,11 @@ const AdminProviders: React.FC = () => {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Gestão de Parceiros</h2>
-          <p className="text-slate-400 text-sm mt-1">Cadastre e gerencie os parceiros que oferecem benefícios à rede.</p>
+          <p className="text-slate-400 text-sm mt-1">
+            Cadastre e gerencie os parceiros que oferecem benefícios à rede.
+          </p>
         </div>
-        <button 
+        <button
           onClick={() => handleOpenModal()}
           className="bg-redoma-dark text-white px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-redoma-dark/10"
         >
@@ -88,40 +79,69 @@ const AdminProviders: React.FC = () => {
               <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Ações</th>
             </tr>
           </thead>
+
           <tbody className="divide-y divide-slate-100">
-            {providers.sort((a,b) => a.name.localeCompare(b.name)).map(p => (
-              <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
-                      {p.name.charAt(0)}
+            {providers
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((p) => (
+                <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
+                        {p.name.charAt(0)}
+                      </div>
+                      <span className="font-bold text-slate-700">{p.name}</span>
                     </div>
-                    <span className="font-bold text-slate-700">{p.name}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{p.category}</span>
-                </td>
-                <td className="px-6 py-4 font-bold text-emerald-600 text-sm">{p.cashbackPercent}%</td>
-                <td className="px-6 py-4">
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${p.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
-                    {p.isActive ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
-                    {p.isActive ? 'Ativo' : 'Inativo'}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right space-x-2">
-                  <button onClick={() => toggleActive(p.id)} className="p-2 text-slate-400 hover:text-redoma-steel transition-colors" title="Alternar Status">
-                    <Power size={16} />
-                  </button>
-                  <button onClick={() => handleOpenModal(p)} className="p-2 text-slate-400 hover:text-blue-500 transition-colors" title="Editar">
-                    <Edit2 size={16} />
-                  </button>
-                  <button onClick={() => { if(window.confirm('Excluir fornecedor?')) deleteProvider(p.id); }} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title="Excluir">
-                    <Trash2 size={16} />
-                  </button>
-                </td>
-              </tr>
-            ))}
+                  </td>
+
+                  <td className="px-6 py-4">
+                    <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                      {p.category}
+                    </span>
+                  </td>
+
+                  <td className="px-6 py-4 font-bold text-emerald-600 text-sm">{p.cashbackPercent}%</td>
+
+                  <td className="px-6 py-4">
+                    <span
+                      className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${
+                        p.isActive
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                          : 'bg-slate-50 text-slate-400 border-slate-200'
+                      }`}
+                    >
+                      {p.isActive ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
+                      {p.isActive ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+
+                  <td className="px-6 py-4 text-right space-x-2">
+                    <button
+                      onClick={() => toggleActive(p.id)}
+                      className="p-2 text-slate-400 hover:text-redoma-steel transition-colors"
+                      title="Alternar Status"
+                    >
+                      <Power size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleOpenModal(p)}
+                      className="p-2 text-slate-400 hover:text-blue-500 transition-colors"
+                      title="Editar"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Excluir fornecedor?')) deleteProvider(p.id);
+                      }}
+                      className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+                      title="Excluir"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
           </tbody>
         </table>
       </div>
@@ -131,14 +151,16 @@ const AdminProviders: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-white/20 animate-in fade-in zoom-in duration-200">
             <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-slate-800">{editingProvider ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h3>
+              <h3 className="text-xl font-bold text-slate-800">
+                {editingProvider ? 'Editar Fornecedor' : 'Novo Fornecedor'}
+              </h3>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <XCircle size={24} />
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="p-8 grid grid-cols-2 gap-6">
-              <div className="space-y-1 col-span-2">
+             <div className="space-y-1 col-span-2">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nome do Fornecedor</label>
                 <input 
                   type="text" required

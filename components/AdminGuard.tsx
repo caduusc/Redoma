@@ -1,40 +1,42 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase'; // ajuste se necessário
+import { supabase } from '../lib/supabase';
 
 type AdminGuardProps = {
   children: React.ReactNode;
   redirectTo?: string;
 };
 
-const AdminGuard: React.FC<AdminGuardProps> = ({ children, redirectTo = '/agent/login' }) => {
+const AdminGuard: React.FC<AdminGuardProps> = ({ children, redirectTo = '/admin/login' }) => {
   const [loading, setLoading] = useState(true);
   const [isAllowed, setIsAllowed] = useState(false);
 
   useEffect(() => {
     const check = async () => {
       try {
-        const { data: userData, error: userErr } = await supabase.auth.getUser();
-        const user = userData?.user;
+        const { data: sessionData } = await supabase.auth.getSession();
+        const user = sessionData.session?.user;
 
-        if (userErr || !user) {
+        if (!user) {
           setIsAllowed(false);
-          setLoading(false);
           return;
         }
 
-        const { data, error } = await supabase
+        const { data: adminUser, error } = await supabase
           .from('admin_users')
           .select('user_id')
           .eq('user_id', user.id)
-          .limit(1);
+          .maybeSingle();
 
         if (error) {
+          console.error('AdminGuard admin_users error:', error);
           setIsAllowed(false);
-        } else {
-          setIsAllowed((data?.length ?? 0) > 0);
+          return;
         }
-      } catch {
+
+        setIsAllowed(!!adminUser);
+      } catch (e) {
+        console.error('AdminGuard unexpected error:', e);
         setIsAllowed(false);
       } finally {
         setLoading(false);
@@ -44,7 +46,7 @@ const AdminGuard: React.FC<AdminGuardProps> = ({ children, redirectTo = '/agent/
     check();
   }, []);
 
-  if (loading) return null; // se quiser, troca por um loader
+  if (loading) return null;
   if (!isAllowed) return <Navigate to={redirectTo} replace />;
 
   return <>{children}</>;
