@@ -1,0 +1,223 @@
+
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useProviders } from '../context/ProviderContext';
+import AdminLayout from '../components/AdminLayout';
+import { Provider } from '../types';
+import { Plus, Edit2, Trash2, Power, Globe, CheckCircle2, XCircle } from 'lucide-react';
+
+const AdminProviders: React.FC = () => {
+  const navigate = useNavigate();
+  const { providers, addProvider, updateProvider, deleteProvider, toggleActive } = useProviders();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
+
+  // Form state
+  const [formData, setFormData] = useState<Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>>({
+    name: '',
+    type: 'ecommerce',
+    category: '',
+    description: '',
+    cashbackPercent: 0,
+    revenueShareText: '',
+    link: '',
+    isActive: true
+  });
+
+  useEffect(() => {
+    const session = localStorage.getItem('redoma_admin_session');
+    if (session !== 'true') {
+      navigate('/admin/login');
+    }
+  }, [navigate]);
+
+  const handleOpenModal = (p: Provider | null = null) => {
+    if (p) {
+      setEditingProvider(p);
+      setFormData({ ...p });
+    } else {
+      setEditingProvider(null);
+      setFormData({
+        name: '',
+        type: 'ecommerce',
+        category: '',
+        description: '',
+        cashbackPercent: 0,
+        revenueShareText: '',
+        link: '',
+        isActive: true
+      });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingProvider) {
+      updateProvider(editingProvider.id, formData);
+    } else {
+      addProvider(formData);
+    }
+    setIsModalOpen(false);
+  };
+
+  return (
+    <AdminLayout activeTab="providers">
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Gestão de Parceiros</h2>
+          <p className="text-slate-400 text-sm mt-1">Cadastre e gerencie os parceiros que oferecem benefícios à rede.</p>
+        </div>
+        <button 
+          onClick={() => handleOpenModal()}
+          className="bg-redoma-dark text-white px-6 py-3 rounded-xl font-bold text-sm uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-redoma-dark/10"
+        >
+          <Plus size={18} />
+          Novo Fornecedor
+        </button>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200">
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nome</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Categoria</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cashback %</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {providers.sort((a,b) => a.name.localeCompare(b.name)).map(p => (
+              <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
+                      {p.name.charAt(0)}
+                    </div>
+                    <span className="font-bold text-slate-700">{p.name}</span>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{p.category}</span>
+                </td>
+                <td className="px-6 py-4 font-bold text-emerald-600 text-sm">{p.cashbackPercent}%</td>
+                <td className="px-6 py-4">
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${p.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                    {p.isActive ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
+                    {p.isActive ? 'Ativo' : 'Inativo'}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-right space-x-2">
+                  <button onClick={() => toggleActive(p.id)} className="p-2 text-slate-400 hover:text-redoma-steel transition-colors" title="Alternar Status">
+                    <Power size={16} />
+                  </button>
+                  <button onClick={() => handleOpenModal(p)} className="p-2 text-slate-400 hover:text-blue-500 transition-colors" title="Editar">
+                    <Edit2 size={16} />
+                  </button>
+                  <button onClick={() => { if(window.confirm('Excluir fornecedor?')) deleteProvider(p.id); }} className="p-2 text-slate-400 hover:text-red-500 transition-colors" title="Excluir">
+                    <Trash2 size={16} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-white/20 animate-in fade-in zoom-in duration-200">
+            <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-slate-800">{editingProvider ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <XCircle size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="p-8 grid grid-cols-2 gap-6">
+              <div className="space-y-1 col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nome do Fornecedor</label>
+                <input 
+                  type="text" required
+                  value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tipo</label>
+                <select 
+                  value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value as any})}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                >
+                  <option value="ecommerce">E-commerce</option>
+                  <option value="service">Serviços</option>
+                  <option value="other">Outros</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Categoria</label>
+                <input 
+                  type="text" required placeholder="Ex: Varejo, Tecnologia..."
+                  value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              <div className="space-y-1 col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Breve Descrição</label>
+                <textarea 
+                  rows={2} required
+                  value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cashback (%)</label>
+                <input 
+                  type="number" step="0.1" required
+                  value={formData.cashbackPercent} onChange={(e) => setFormData({...formData, cashbackPercent: parseFloat(e.target.value)})}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link de Acesso (URL)</label>
+                <input 
+                  type="url" required
+                  value={formData.link} onChange={(e) => setFormData({...formData, link: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              <div className="space-y-1 col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Texto de Impacto (Revenue Share)</label>
+                <input 
+                  type="text" required placeholder="Ex: Parte do valor retorna para o seu condomínio..."
+                  value={formData.revenueShareText} onChange={(e) => setFormData({...formData, revenueShareText: e.target.value})}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                />
+              </div>
+
+              <div className="col-span-2 pt-4 flex gap-3">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-6 py-4 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all border border-slate-200">
+                  Cancelar
+                </button>
+                <button type="submit" className="flex-1 px-6 py-4 rounded-xl font-bold text-xs uppercase tracking-widest bg-redoma-dark text-white hover:bg-slate-800 transition-all shadow-xl shadow-redoma-dark/20">
+                  {editingProvider ? 'Salvar Alterações' : 'Criar Fornecedor'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </AdminLayout>
+  );
+};
+
+export default AdminProviders;
