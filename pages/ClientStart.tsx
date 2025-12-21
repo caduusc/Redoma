@@ -2,24 +2,59 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
+import { supabase } from '../lib/supabase';
 import Logo from '../components/Logo';
-import { LayoutGrid } from 'lucide-react';
+import { LayoutGrid, AlertCircle, Loader2 } from 'lucide-react';
 
 const ClientStart: React.FC = () => {
   const [communityId, setCommunityId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { createConversation } = useChat();
   const navigate = useNavigate();
 
-  // Fix: handleStart must be async because createConversation returns a Promise<string>
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCommunityId(e.target.value);
+    if (error) setError(null);
+  };
+
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (communityId.trim()) {
-      // Fix: added await to resolve the promise returned by createConversation, fixing the type mismatch on line 19
-      const convId = await createConversation(communityId);
-      localStorage.setItem('redoma_client_cid', communityId);
+    const normalizedId = communityId.trim().toLowerCase();
+    
+    if (!normalizedId) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // 1. Validar comunidade no Supabase
+      // A política de RLS já deve garantir que apenas isActive=true sejam visíveis
+      const { data, error: sbError } = await supabase
+        .from('communities')
+        .select('id')
+        .eq('id', normalizedId)
+        .maybeSingle();
+
+      if (sbError) throw sbError;
+
+      if (!data) {
+        setError("O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato no numero 11 97189-1760");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Prosseguir com o fluxo original se a comunidade existir
+      const convId = await createConversation(normalizedId);
+      localStorage.setItem('redoma_client_cid', normalizedId);
       localStorage.setItem('redoma_client_token', Math.random().toString(36).substring(7));
       localStorage.setItem('redoma_active_conv', convId);
       navigate('/client/chat');
+    } catch (err) {
+      console.error("Erro na validação:", err);
+      setError("Não foi possível validar agora. Tente novamente.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -54,17 +89,34 @@ const ClientStart: React.FC = () => {
               type="text"
               placeholder="Ex: unidos-somos-fortes"
               value={communityId}
-              onChange={(e) => setCommunityId(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300 bg-slate-50/50"
+              onChange={handleInputChange}
+              disabled={loading}
+              className={`w-full px-5 py-4 rounded-2xl border ${error ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-slate-50/50'} focus:ring-2 ${error ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'} focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
               required
             />
+            {error && (
+              <div className="flex items-start gap-2 mt-2 px-1 animate-in fade-in slide-in-from-top-1">
+                <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
+                <p className="text-[11px] font-semibold text-red-600 leading-tight">
+                  {error}
+                </p>
+              </div>
+            )}
           </div>
           
           <button
             type="submit"
-            className="w-full bg-redoma-dark text-white font-bold py-4 rounded-2xl hover:bg-redoma-navy transition-all shadow-lg active:scale-[0.98] uppercase tracking-widest text-xs"
+            disabled={loading || !communityId.trim()}
+            className="w-full bg-redoma-dark text-white font-bold py-4 rounded-2xl hover:bg-redoma-navy transition-all shadow-lg active:scale-[0.98] uppercase tracking-widest text-xs disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Iniciar Atendimento
+            {loading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>Validando...</span>
+              </>
+            ) : (
+              <span>Iniciar Atendimento</span>
+            )}
           </button>
           
           <p className="text-center text-[11px] text-slate-400 leading-relaxed font-medium">

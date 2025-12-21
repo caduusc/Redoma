@@ -46,3 +46,11 @@ export interface Provider {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface Community {
+  id: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

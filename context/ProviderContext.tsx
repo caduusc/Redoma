@@ -20,7 +20,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     type: 'ecommerce',
     category: 'Varejo',
     description: 'Tudo o que você precisa com entrega rápida e segura.',
-    cashbackPercent: 3.0,
+    cashbackPercent: 5.0,
     revenueShareText: 'Parte do valor retorna para o fundo da sua comunidade.',
     link: 'https://www.mercadolivre.com.br',
     isActive: true
@@ -30,7 +30,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     type: 'ecommerce',
     category: 'Varejo',
     description: 'Ofertas incríveis e cupons de frete grátis todos os dias.',
-    cashbackPercent: 3.0,
+    cashbackPercent: 5.0,
     revenueShareText: 'Ajude sua comunidade comprando na Shopee.',
     link: 'https://shopee.com.br',
     isActive: true
@@ -40,7 +40,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     type: 'service',
     category: 'Manutenção',
     description: 'Serviços especializados de pintura e elétrica.',
-    cashbackPercent: 4.0,
+    cashbackPercent: 5.0,
     revenueShareText: 'Serviço premium com benefício direto para a comunidade.',
     link: '#',
     isActive: true
