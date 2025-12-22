@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react';
 import { Conversation, Message, User, SenderType } from '../types';
 import { supabasePublic, supabaseSupport } from '../lib/supabase';
 
@@ -8,12 +8,17 @@ interface ChatContextType {
   currentUser: User | null;
   login: (email: string) => void; // pode manter (só pro estado local)
   logout: () => void;
+
   createConversation: (communityId: string) => Promise<string>;
   addMessage: (conversationId: string, text: string, senderType: SenderType) => Promise<void>;
   claimConversation: (conversationId: string) => Promise<void>;
   closeConversation: (conversationId: string) => Promise<void>;
+
   getConversation: (id: string) => Conversation | undefined;
   getMessages: (conversationId: string) => Message[];
+
+  // ✅ novo: evita delay (provider reage quando muda)
+  setActiveConversationId: (id: string | null) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -41,7 +46,33 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return stored ? JSON.parse(stored) : null;
   });
 
+  // ✅ novo: estado reativo do chat ativo (mata delay)
+  const [activeConvId, setActiveConvId] = useState<string | null>(() => getActiveConversationId());
+
   const isAgent = useMemo(() => !!currentUser, [currentUser]);
+
+  // ✅ helper: dedupe por id (evita duplicação visual)
+  const upsertMessage = useCallback((msg: Message) => {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === msg.id)) return prev;
+      return [...prev, msg];
+    });
+  }, []);
+
+  const upsertConversation = useCallback((conv: Conversation) => {
+    setConversations((prev) => {
+      const exists = prev.some((c) => c.id === conv.id);
+      if (!exists) return [...prev, conv];
+      return prev.map((c) => (c.id === conv.id ? conv : c));
+    });
+  }, []);
+
+  // ✅ novo método público: setar ativo de forma reativa
+  const setActiveConversationId = useCallback((id: string | null) => {
+    if (id) localStorage.setItem('redoma_active_conv', id);
+    else localStorage.removeItem('redoma_active_conv');
+    setActiveConvId(id);
+  }, []);
 
   useEffect(() => {
     let convChannel: any;
@@ -52,9 +83,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // sempre garanta token para cliente
         getOrCreateClientToken();
 
+        // =========================
+        // ✅ MODO SUPORTE (AGENTE)
+        // =========================
         if (isAgent) {
-          // ✅ SUPORTE: usar supabaseSupport
-          const { data: convs, error: convErr } = await supabaseSupport.from('conversations').select('*');
+          const { data: convs, error: convErr } = await supabaseSupport
+            .from('conversations')
+            .select('*');
+
           if (convErr) console.error('[support fetch conversations]', convErr);
           if (convs) setConversations(convs as Conversation[]);
 
@@ -62,35 +98,33 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .from('messages')
             .select('*')
             .order('createdAt', { ascending: true });
+
           if (msgErr) console.error('[support fetch messages]', msgErr);
           if (msgs) setMessages(msgs as Message[]);
 
           convChannel = supabaseSupport
             .channel('support_conversations_channel')
             .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'conversations' }, (payload: any) => {
-              if (payload.eventType === 'INSERT') {
-                setConversations((prev) => [...prev, payload.new as Conversation]);
-              } else if (payload.eventType === 'UPDATE') {
-                setConversations((prev) =>
-                  prev.map((c) => (c.id === payload.new.id ? (payload.new as Conversation) : c))
-                );
+              if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                upsertConversation(payload.new as Conversation);
               }
             })
             .subscribe();
 
+          // ✅ Suporte: realtime com dedupe
           msgChannel = supabaseSupport
             .channel('support_messages_channel')
             .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'messages' }, (payload: any) => {
-              setMessages((prev) => [...prev, payload.new as Message]);
+              upsertMessage(payload.new as Message);
             })
             .subscribe();
 
           return;
         }
 
-        // ✅ CLIENTE (ANON): usar supabasePublic e limitar ao chat ativo
-        const activeConvId = getActiveConversationId();
-
+        // =========================
+        // ✅ MODO CLIENTE (ANON)
+        // =========================
         if (activeConvId) {
           const { data: conv, error: convErr } = await supabasePublic
             .from('conversations')
@@ -114,6 +148,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setMessages([]);
         }
 
+        // ✅ subscriptions reativas ao activeConvId
         if (activeConvId) {
           convChannel = supabasePublic
             .channel(`client_conversations_${activeConvId}`)
@@ -129,7 +164,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .on(
               'postgres_changes' as any,
               { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversationId=eq.${activeConvId}` },
-              (payload: any) => setMessages((prev) => [...prev, payload.new as Message])
+              (payload: any) => {
+                // ✅ cliente: também dedupe (protege de multi-subscribe)
+                upsertMessage(payload.new as Message);
+              }
             )
             .subscribe();
         }
@@ -141,10 +179,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     boot();
 
     return () => {
+      // ✅ cleanup forte (evita dupla subscription em dev)
       convChannel?.unsubscribe?.();
       msgChannel?.unsubscribe?.();
     };
-  }, [isAgent]);
+  }, [isAgent, activeConvId, upsertMessage, upsertConversation]);
 
   // Mantém só pro estado local (não substitui o login real do AgentLogin)
   const login = (email: string) => {
@@ -157,7 +196,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(null);
     localStorage.removeItem('redoma_current_user');
 
-    // importante: desloga do supabaseSupport (se tiver logado)
     try {
       await supabaseSupport.auth.signOut();
     } catch {
@@ -187,6 +225,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw error;
     }
 
+    // ✅ cliente: set ativo reativo (mata delay)
+    setActiveConversationId(id);
+
+    // Atualiza state local
     setConversations((prev) => (prev.some((c) => c.id === id) ? prev : [...prev, newConv as any]));
     return id;
   };
@@ -206,7 +248,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clientToken,
     };
 
-    // cliente manda via public; agente também poderia mandar via support (se você quiser separar)
     const clientToUse = senderType === 'agent' ? supabaseSupport : supabasePublic;
 
     const { error } = await clientToUse.from('messages').insert([newMessage]);
@@ -215,11 +256,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw error;
     }
 
-    setMessages((prev) => [...prev, newMessage as any]);
+    // ✅ Optimistic SOMENTE para cliente
+    if (senderType !== 'agent') {
+      upsertMessage(newMessage as any);
+    }
+    // ✅ agente não faz optimistic: vai aparecer via realtime
   };
 
   const claimConversation = async (conversationId: string) => {
-    // agente: sempre via supabaseSupport
     const { error } = await supabaseSupport
       .from('conversations')
       .update({ status: 'claimed', claimedBy: currentUser?.name || 'Atendente' })
@@ -250,6 +294,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         closeConversation,
         getConversation,
         getMessages,
+        setActiveConversationId,
       }}
     >
       {children}

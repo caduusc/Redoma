@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
-import { supabasePublic } from '../lib/supabase'; // ✅ trocado
+import { supabasePublic } from '../lib/supabase';
 import Logo from '../components/Logo';
 import { LayoutGrid, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -18,6 +18,7 @@ const ClientStart: React.FC = () => {
   const [communityId, setCommunityId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const { createConversation } = useChat();
   const navigate = useNavigate();
 
@@ -35,10 +36,8 @@ const ClientStart: React.FC = () => {
     setError(null);
 
     try {
-      // 0) Garantir que o clientToken existe ANTES de qualquer request/insert
       getOrCreateClientToken();
 
-      // 1) Validar comunidade (✅ agora usa supabasePublic)
       const { data, error: sbError } = await supabasePublic
         .from('communities')
         .select('id')
@@ -54,11 +53,10 @@ const ClientStart: React.FC = () => {
         return;
       }
 
-      // 2) Prosseguir
       localStorage.setItem('redoma_client_cid', normalizedId);
 
-      const convId = await createConversation(normalizedId);
-      localStorage.setItem('redoma_active_conv', convId);
+      // ✅ createConversation já seta o activeConvId de forma reativa no Provider
+      await createConversation(normalizedId);
 
       navigate('/client/chat');
     } catch (err) {
@@ -78,9 +76,7 @@ const ClientStart: React.FC = () => {
         <div className="p-10 bg-redoma-dark text-white text-center">
           <Logo size={80} className="mb-6 drop-shadow-xl" />
           <h1 className="text-3xl font-bold tracking-tight">Redoma Tech</h1>
-          <p className="text-redoma-glow text-sm mt-3 font-medium">
-            Crescimento Inteligente para comunidades
-          </p>
+          <p className="text-redoma-glow text-sm mt-3 font-medium">Crescimento Inteligente para comunidades</p>
         </div>
 
         <div className="px-10 py-6 border-b border-slate-50 bg-slate-50/30">
@@ -95,10 +91,7 @@ const ClientStart: React.FC = () => {
 
         <form onSubmit={handleStart} className="p-10 space-y-6 pt-6">
           <div className="space-y-2">
-            <label
-              htmlFor="community"
-              className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1"
-            >
+            <label htmlFor="community" className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">
               ID da Comunidade
             </label>
             <input
@@ -110,17 +103,13 @@ const ClientStart: React.FC = () => {
               disabled={loading}
               className={`w-full px-5 py-4 rounded-2xl border ${
                 error ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-slate-50/50'
-              } focus:ring-2 ${
-                error ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'
-              } focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
+              } focus:ring-2 ${error ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'} focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
               required
             />
             {error && (
               <div className="flex items-start gap-2 mt-2 px-1 animate-in fade-in slide-in-from-top-1">
                 <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
-                <p className="text-[11px] font-semibold text-red-600 leading-tight">
-                  {error}
-                </p>
+                <p className="text-[11px] font-semibold text-red-600 leading-tight">{error}</p>
               </div>
             )}
           </div>
