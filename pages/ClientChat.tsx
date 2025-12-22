@@ -67,27 +67,34 @@ const ClientChat: React.FC = () => {
     boot();
   }, [navigate]);
 
-  // ✅ 2) "Visto": via RPC (bypass controlado) — marca last_client_seen_at
+  // ✅ 2) "Visto": via RPC (retorna 1 quando atualiza de fato)
   useEffect(() => {
     if (!convId) return;
 
     const markSeen = async () => {
       const token = localStorage.getItem('redoma_client_token') || getOrCreateClientToken();
 
-      const { error } = await supabasePublic.rpc('mark_client_seen', {
+      const { data, error } = await supabasePublic.rpc('mark_client_seen', {
         p_conversation_id: convId,
         p_client_token: token,
       });
 
-      if (error) console.error('[client mark seen rpc]', error);
+      if (error) {
+        console.error('[client mark seen rpc]', error);
+        return;
+      }
+
+      // data deve ser 1 (atualizou) ou 0 (não bateu no WHERE)
+      if (data === 0) {
+        console.warn('[client mark seen rpc] NÃO atualizou (0 rows). Token/coluna não bateu.', {
+          convId,
+          token,
+        });
+      }
     };
 
-    // marca ao entrar
     markSeen();
-
-    // mantém ping enquanto estiver com a conversa aberta
     const t = setInterval(markSeen, 10000);
-
     return () => clearInterval(t);
   }, [convId]);
 
@@ -123,9 +130,7 @@ const ClientChat: React.FC = () => {
           Suporte Redoma Ativo
         </div>
 
-        {/* ✅ passa conversation para o MessageList (para o ✓✓ azul funcionar) */}
         <MessageList messages={messages} currentType="client" conversation={conversation} />
-
         <MessageInput onSend={handleSend} disabled={conversation?.status === 'closed'} />
       </div>
     </ChatLayout>
