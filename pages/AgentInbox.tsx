@@ -4,17 +4,17 @@ import { useChat } from '../context/ChatContext';
 import ChatLayout from '../components/ChatLayout';
 import { ConversationStatus } from '../types';
 import { MessageSquare, Clock, User, LogOut } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabaseSupport } from '../lib/supabase';
 
 const AgentInbox: React.FC = () => {
   const { conversations, logout, currentUser } = useChat();
   const [filter, setFilter] = useState<ConversationStatus>('open');
   const navigate = useNavigate();
 
-  // ✅ Guard: exige sessão do Supabase + redoma_current_user (modo agente)
+  // ✅ Guard: exige sessão do Supabase SUPPORT + redoma_current_user (modo agente)
   useEffect(() => {
     const guard = async () => {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await supabaseSupport.auth.getSession();
       if (!data.session || !currentUser) {
         navigate('/agent/login', { replace: true });
       }
@@ -24,10 +24,10 @@ const AgentInbox: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      await supabaseSupport.auth.signOut();
     } finally {
       logout(); // limpa redoma_current_user
-      navigate('/agent/login');
+      navigate('/agent/login', { replace: true });
     }
   };
 
@@ -112,6 +112,7 @@ const AgentInbox: React.FC = () => {
                       {conv.status}
                     </span>
                   </div>
+
                   <div className="flex items-center gap-4 text-[11px] text-slate-400 font-bold uppercase tracking-wider">
                     <div className="flex items-center gap-1.5">
                       <Clock size={12} className="text-redoma-steel" />
@@ -122,6 +123,7 @@ const AgentInbox: React.FC = () => {
                         })}
                       </span>
                     </div>
+
                     {conv.claimedBy && (
                       <div className="flex items-center gap-1.5">
                         <User size={12} className="text-redoma-steel" />

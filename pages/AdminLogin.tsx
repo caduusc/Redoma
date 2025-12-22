@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
-import { supabase } from '../lib/supabase';
+import { supabaseMaster } from '../lib/supabase';
 
 const AdminLogin: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -14,8 +14,8 @@ const AdminLogin: React.FC = () => {
     setLoading(true);
 
     try {
-      // 1) Login REAL no Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // 1) Login REAL no Supabase Auth (MASTER)
+      const { data, error } = await supabaseMaster.auth.signInWithPassword({
         email,
         password,
       });
@@ -27,13 +27,13 @@ const AdminLogin: React.FC = () => {
 
       const userId = data.user?.id;
       if (!userId) {
-        await supabase.auth.signOut();
+        await supabaseMaster.auth.signOut();
         alert('Sessão inválida. Tente novamente.');
         return;
       }
 
       // 2) Validação: usuário precisa estar na tabela admin_users
-      const { data: adminUser, error: adminError } = await supabase
+      const { data: adminUser, error: adminError } = await supabaseMaster
         .from('admin_users')
         .select('user_id')
         .eq('user_id', userId)
@@ -41,18 +41,18 @@ const AdminLogin: React.FC = () => {
 
       if (adminError) {
         console.error(adminError);
-        await supabase.auth.signOut();
+        await supabaseMaster.auth.signOut();
         alert('Erro ao validar permissões de admin.');
         return;
       }
 
       if (!adminUser) {
-        await supabase.auth.signOut();
+        await supabaseMaster.auth.signOut();
         alert('Acesso negado. Usuário não autorizado.');
         return;
       }
 
-      // 2A) Navegação mais segura (evita "voltar" pro login e ajuda a não parecer reload)
+      // 2A) Navegação mais segura
       navigate('/admin/providers', { replace: true });
     } catch (err) {
       console.error(err);
@@ -62,17 +62,12 @@ const AdminLogin: React.FC = () => {
     }
   };
 
-  // 2B) (Importante) Não usar mais localStorage "redoma_admin_session" no master.
-  // O master é: Supabase Auth + whitelist em admin_users.
-
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-white/5">
         <div className="p-10 border-b border-slate-50 text-center bg-slate-50/50">
           <Logo size={48} className="mb-4" />
-          <h1 className="text-xl font-bold text-redoma-dark tracking-tight">
-            Redoma Central Control
-          </h1>
+          <h1 className="text-xl font-bold text-redoma-dark tracking-tight">Redoma Central Control</h1>
           <p className="text-slate-400 text-[10px] mt-1 font-extrabold uppercase tracking-[0.2em]">
             Gestão de Ecossistema
           </p>

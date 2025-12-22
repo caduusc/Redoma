@@ -5,17 +5,24 @@ import ChatLayout from '../components/ChatLayout';
 import MessageList from '../components/MessageList';
 import MessageInput from '../components/MessageInput';
 import { Hand, CheckCircle2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabaseSupport } from '../lib/supabase';
 
 const AgentChat: React.FC = () => {
   const { conversationId } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
-  const { getConversation, getMessages, addMessage, claimConversation, closeConversation, currentUser } = useChat();
+  const {
+    getConversation,
+    getMessages,
+    addMessage,
+    claimConversation,
+    closeConversation,
+    currentUser,
+  } = useChat();
 
-  // ✅ Guard: exige sessão e modo agente
+  // ✅ Guard: exige sessão do SUPORTE e modo agente
   useEffect(() => {
     const guard = async () => {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await supabaseSupport.auth.getSession();
       if (!data.session || !currentUser) {
         navigate('/agent/login', { replace: true });
       }
@@ -40,7 +47,7 @@ const AgentChat: React.FC = () => {
 
   const handleClose = async () => {
     await closeConversation(conversationId);
-    navigate('/agent/inbox');
+    navigate('/agent/inbox', { replace: true });
   };
 
   const canType = conversation.status === 'claimed';
@@ -78,7 +85,11 @@ const AgentChat: React.FC = () => {
       <div className="flex flex-col h-full">
         <div className="bg-white border-b border-slate-100 px-6 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${conversation.status === 'claimed' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+            <div
+              className={`w-2 h-2 rounded-full ${
+                conversation.status === 'claimed' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
+              }`}
+            />
             <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
               {conversation.status}
             </span>
@@ -91,7 +102,6 @@ const AgentChat: React.FC = () => {
         </div>
 
         <MessageList messages={messages} currentType="agent" />
-
         <MessageInput onSend={handleSend} disabled={!canType} />
 
         {isOpen && (
