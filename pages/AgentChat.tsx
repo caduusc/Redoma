@@ -131,7 +131,7 @@ const AgentChat: React.FC = () => {
               </div>
               <h3 className="font-extrabold text-redoma-dark text-lg mb-3">Novo Chamado</h3>
               <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-                Este condomínio aguarda um atendente. Assuma agora para iniciar o diálogo.
+                Esta comunidade aguarda um atendente. Assuma agora para iniciar o diálogo.
               </p>
               <button
                 onClick={handleClaim}
