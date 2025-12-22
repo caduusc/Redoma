@@ -1,54 +1,35 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabaseSupport } from '../lib/supabase';
 
-type SupportGuardProps = {
-  children: React.ReactNode;
-  redirectTo?: string;
-};
+type Props = { children: React.ReactNode; redirectTo?: string };
 
-const SupportGuard: React.FC<SupportGuardProps> = ({ children, redirectTo = '/agent/login' }) => {
+const SupportGuard: React.FC<Props> = ({ children, redirectTo = '/agent/login' }) => {
   const [loading, setLoading] = useState(true);
-  const [isAllowed, setIsAllowed] = useState(false);
+  const [ok, setOk] = useState(false);
 
   useEffect(() => {
-    const check = async () => {
+    (async () => {
       try {
-        const { data: userData, error: userErr } = await supabase.auth.getUser();
+        const { data: userData } = await supabaseSupport.auth.getUser();
         const user = userData?.user;
+        if (!user) return setOk(false);
 
-        if (userErr || !user) {
-          setIsAllowed(false);
-          return;
-        }
-
-        const { data, error } = await supabase
+        const { data, error } = await supabaseSupport
           .from('support_users')
           .select('user_id')
           .eq('user_id', user.id)
-          .limit(1);
+          .maybeSingle();
 
-        if (error) {
-          console.error('Support check error:', error);
-          setIsAllowed(false);
-          return;
-        }
-
-        setIsAllowed((data?.length ?? 0) > 0);
-      } catch (e) {
-        console.error('Support check unexpected error:', e);
-        setIsAllowed(false);
+        setOk(!error && !!data);
       } finally {
         setLoading(false);
       }
-    };
-
-    check();
+    })();
   }, []);
 
   if (loading) return null;
-  if (!isAllowed) return <Navigate to={redirectTo} replace />;
-
+  if (!ok) return <Navigate to={redirectTo} replace />;
   return <>{children}</>;
 };
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
-import { supabase } from '../lib/supabase';
+import { supabaseSupport } from '../lib/supabase';
 
 const AgentLogin: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -14,8 +14,8 @@ const AgentLogin: React.FC = () => {
     setLoading(true);
 
     try {
-      // 1) Login real
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // 1) Login real (SUPPORT)
+      const { data, error } = await supabaseSupport.auth.signInWithPassword({
         email,
         password,
       });
@@ -28,32 +28,32 @@ const AgentLogin: React.FC = () => {
 
       const userId = data.user?.id;
       if (!userId) {
-        await supabase.auth.signOut();
+        await supabaseSupport.auth.signOut();
         alert('Sessão inválida. Tente novamente.');
         return;
       }
 
-      // 2) Validação por whitelist (admin_users)
-      const { data: adminUser, error: adminErr } = await supabase
-        .from('admin_users')
+      // 2) Validação: usuário precisa estar na tabela support_users
+      const { data: supportUser, error: supportErr } = await supabaseSupport
+        .from('support_users')
         .select('user_id')
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (adminErr) {
-        console.error('Admin check error:', adminErr);
-        await supabase.auth.signOut();
+      if (supportErr) {
+        console.error('Support check error:', supportErr);
+        await supabaseSupport.auth.signOut();
         alert('Erro ao validar permissão. Tente novamente.');
         return;
       }
 
-      if (!adminUser) {
-        await supabase.auth.signOut();
+      if (!supportUser) {
+        await supabaseSupport.auth.signOut();
         alert('Acesso negado. Usuário não autorizado.');
         return;
       }
 
-      // 3) Marca como agente no app (isso ativa isAgent no ChatContext)
+      // 3) Marca como agente no app (mantém seu padrão)
       localStorage.setItem(
         'redoma_current_user',
         JSON.stringify({

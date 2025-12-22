@@ -1,33 +1,33 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const supabaseUrl = 'https://wjpkvdkmkoojjmnjdtnk.supabase.co';
+const supabaseAnonKey = 'sb_publishable_9tyk3EMUSLUy3VkK9yypaQ_NWRYPmUl';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing Supabase env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY'
-  );
-}
+// 1) Público (cliente) — NÃO persistir sessão pra não sujar login do suporte/master
+export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+});
 
-/**
- * Custom fetch que injeta x-client-token em toda requisição.
- * Ele lê do localStorage na hora da request (não só no boot).
- */
-const fetchWithClientToken: typeof fetch = async (input, init) => {
-  const headers = new Headers(init?.headers || {});
+// 2) Suporte — persiste sessão em uma chave própria
+export const supabaseSupport = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+    storageKey: 'redoma_support_auth',
+  },
+});
 
-  try {
-    const token = localStorage.getItem('redoma_client_token');
-    if (token) headers.set('x-client-token', token);
-  } catch {
-    // ignore (SSR / ambientes sem localStorage)
-  }
-
-  return fetch(input, { ...init, headers });
-};
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  global: {
-    fetch: fetchWithClientToken,
+// 3) Master — persiste sessão em outra chave própria
+export const supabaseMaster = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+    storageKey: 'redoma_master_auth',
   },
 });

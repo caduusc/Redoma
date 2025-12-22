@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
-import { supabase } from '../lib/supabase';
+import { supabasePublic } from '../lib/supabase'; // ✅ trocado
 import Logo from '../components/Logo';
 import { LayoutGrid, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -9,7 +9,6 @@ const getOrCreateClientToken = () => {
   const existing = localStorage.getItem('redoma_client_token');
   if (existing) return existing;
 
-  // token simples e suficiente pro seu caso (anon). Pode trocar por crypto.randomUUID() se quiser.
   const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
   localStorage.setItem('redoma_client_token', token);
   return token;
@@ -39,8 +38,8 @@ const ClientStart: React.FC = () => {
       // 0) Garantir que o clientToken existe ANTES de qualquer request/insert
       getOrCreateClientToken();
 
-      // 1) Validar comunidade
-      const { data, error: sbError } = await supabase
+      // 1) Validar comunidade (✅ agora usa supabasePublic)
+      const { data, error: sbError } = await supabasePublic
         .from('communities')
         .select('id')
         .eq('id', normalizedId)

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabaseMaster } from '../lib/supabase';
 
 type AdminGuardProps = {
   children: React.ReactNode;
@@ -14,7 +14,7 @@ const AdminGuard: React.FC<AdminGuardProps> = ({ children, redirectTo = '/admin/
   useEffect(() => {
     const check = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
+        const { data: sessionData } = await supabaseMaster.auth.getSession();
         const user = sessionData.session?.user;
 
         if (!user) {
@@ -22,7 +22,7 @@ const AdminGuard: React.FC<AdminGuardProps> = ({ children, redirectTo = '/admin/
           return;
         }
 
-        const { data: adminUser, error } = await supabase
+        const { data: adminUser, error } = await supabaseMaster
           .from('admin_users')
           .select('user_id')
           .eq('user_id', user.id)
