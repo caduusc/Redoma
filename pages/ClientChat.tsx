@@ -38,7 +38,6 @@ const ClientChat: React.FC = () => {
 
       const token = getOrCreateClientToken();
 
-      // busca a conversa mais recente não-fechada desse cliente nessa comunidade
       const { data, error } = await supabasePublic
         .from('conversations')
         .select('id, status, createdAt')
@@ -62,24 +61,25 @@ const ClientChat: React.FC = () => {
         return;
       }
 
-      // se não achou conversa aberta, volta pro start
       navigate('/client/start');
     };
 
     boot();
   }, [navigate]);
 
-  // ✅ 2) "Visto": quando o cliente está no chat, marca last_client_seen_at
+  // ✅ 2) "Visto": via RPC (bypass controlado) — marca last_client_seen_at
   useEffect(() => {
     if (!convId) return;
 
     const markSeen = async () => {
-      const { error } = await supabasePublic
-        .from('conversations')
-        .update({ last_client_seen_at: new Date().toISOString() })
-        .eq('id', convId);
+      const token = localStorage.getItem('redoma_client_token') || getOrCreateClientToken();
 
-      if (error) console.error('[client mark seen]', error);
+      const { error } = await supabasePublic.rpc('mark_client_seen', {
+        p_conversation_id: convId,
+        p_client_token: token,
+      });
+
+      if (error) console.error('[client mark seen rpc]', error);
     };
 
     // marca ao entrar
