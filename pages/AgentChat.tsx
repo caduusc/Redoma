@@ -30,6 +30,24 @@ const AgentChat: React.FC = () => {
     guard();
   }, [currentUser, navigate]);
 
+  // ✅ "Visto": enquanto o agente está com o chat aberto, marca last_agent_seen_at
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const markSeen = async () => {
+      const { error } = await supabaseSupport
+        .from('conversations')
+        .update({ last_agent_seen_at: new Date().toISOString() })
+        .eq('id', conversationId);
+
+      if (error) console.error('[agent mark seen]', error);
+    };
+
+    markSeen();
+    const t = setInterval(markSeen, 10000);
+    return () => clearInterval(t);
+  }, [conversationId]);
+
   if (!conversationId) return null;
 
   const conversation = getConversation(conversationId);
@@ -101,7 +119,8 @@ const AgentChat: React.FC = () => {
           )}
         </div>
 
-        <MessageList messages={messages} currentType="agent" />
+        {/* ✅ passa conversation para o "Visto" funcionar */}
+        <MessageList messages={messages} currentType="agent" conversation={conversation} />
         <MessageInput onSend={handleSend} disabled={!canType} />
 
         {isOpen && (

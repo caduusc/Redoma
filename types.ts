@@ -1,4 +1,3 @@
-
 export type ConversationStatus = 'open' | 'claimed' | 'closed';
 
 export interface Conversation {
@@ -7,6 +6,13 @@ export interface Conversation {
   status: ConversationStatus;
   claimedBy?: string | null;
   createdAt: string;
+
+  // ✅ para "Visto" (check azul)
+  last_client_seen_at?: string | null;
+  last_agent_seen_at?: string | null;
+
+  // (opcional, mas existe no seu insert de createConversation / addMessage)
+  clientToken?: string | null;
 }
 
 export type SenderType = 'client' | 'agent';
@@ -17,6 +23,9 @@ export interface Message {
   senderType: SenderType;
   text: string;
   createdAt: string;
+
+  // (opcional, mas existe no seu insert de addMessage)
+  clientToken?: string | null;
 }
 
 export interface User {
@@ -35,7 +44,7 @@ export interface ChatState {
 export interface Provider {
   id: string;
   name: string;
-  type: "ecommerce" | "service" | "other";
+  type: 'ecommerce' | 'service' | 'other';
   category: string;
   description: string;
   cashbackPercent: number;
