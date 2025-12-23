@@ -1,6 +1,4 @@
-
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
 import Logo from './Logo';
 
@@ -30,11 +28,11 @@ const ChatLayout: React.FC<ChatLayoutProps> = ({ children, title, showBack, onBa
             {isAgent && <p className="text-[10px] text-redoma-glow font-bold uppercase tracking-widest">Painel Administrativo</p>}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {actions}
-        </div>
+        <div className="flex items-center gap-3">{actions}</div>
       </header>
-      <main className="flex-1 overflow-hidden relative bg-redoma-bg">
+
+      {/* ✅ garante altura pro scroll dos filhos */}
+      <main className="flex-1 overflow-hidden relative bg-redoma-bg h-full">
         {children}
       </main>
     </div>
