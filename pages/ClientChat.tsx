@@ -167,14 +167,9 @@ const ClientChat: React.FC = () => {
   const conversation = getConversation(convId);
   const messages = getMessages(convId);
 
-  // ✅ TESTE: FORÇA ERRO SEMPRE QUE ENVIAR (REMOVER DEPOIS)
   const handleSend = async (text: string) => {
     try {
-      // erro proposital pra validar o logger
-      throw new Error('TESTE_FORCADO_LOG_CLIENTCHAT');
-
-      // (quando remover o teste, volta isso)
-      // addMessage(convId, text, 'client');
+      addMessage(convId, text, 'client');
     } catch (err: any) {
       console.error('[client send message]', err);
 
@@ -189,7 +184,7 @@ const ClientChat: React.FC = () => {
         method: 'LOCAL',
         client_token: token,
         request_payload: { convId, textPreview: text?.slice?.(0, 120) },
-        extra_context: { phase: 'handleSend_forced_error' },
+        extra_context: { phase: 'handleSend' },
       });
     }
   };
