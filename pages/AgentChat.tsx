@@ -19,7 +19,7 @@ const AgentChat: React.FC = () => {
     currentUser,
   } = useChat();
 
-  // ✅ Guard: exige sessão do SUPORTE e modo agente
+  // 🔐 Guard
   useEffect(() => {
     const guard = async () => {
       const { data } = await supabaseSupport.auth.getSession();
@@ -30,21 +30,15 @@ const AgentChat: React.FC = () => {
     guard();
   }, [currentUser, navigate]);
 
-  // ✅ "Visto": enquanto o agente está com o chat aberto, marca last_agent_seen_at
+  // 👁️ seen
   useEffect(() => {
     if (!conversationId) return;
-
-    const markSeen = async () => {
-      const { error } = await supabaseSupport
+    const t = setInterval(() => {
+      supabaseSupport
         .from('conversations')
         .update({ last_agent_seen_at: new Date().toISOString() })
         .eq('id', conversationId);
-
-      if (error) console.error('[agent mark seen]', error);
-    };
-
-    markSeen();
-    const t = setInterval(markSeen, 10000);
+    }, 10000);
     return () => clearInterval(t);
   }, [conversationId]);
 
@@ -60,7 +54,11 @@ const AgentChat: React.FC = () => {
   };
 
   const handleClaim = async () => {
-    await claimConversation(conversationId);
+    try {
+      await claimConversation(conversationId);
+    } catch (e: any) {
+      alert(e?.message || 'Erro ao assumir atendimento');
+    }
   };
 
   const handleClose = async () => {
@@ -68,81 +66,58 @@ const AgentChat: React.FC = () => {
     navigate('/agent/inbox', { replace: true });
   };
 
-  const canType = conversation.status === 'claimed';
+  const canType = conversation.status === 'claimed'; // ✅ item 3 incluso
   const isOpen = conversation.status === 'open';
 
   return (
     <ChatLayout
-      title={`${conversation.communityId}`}
+      title={conversation.communityId}
       showBack
       onBack={() => navigate('/agent/inbox')}
       isAgent
       actions={
         <div className="flex gap-2">
-          {conversation.status === 'open' && (
+          {isOpen && (
             <button
               onClick={handleClaim}
-              className="flex items-center gap-1.5 bg-redoma-steel text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-redoma-glow transition-colors shadow-lg shadow-redoma-dark/20"
+              className="flex items-center gap-1.5 bg-redoma-steel text-white px-4 py-2 rounded-xl text-xs font-bold"
             >
               <Hand size={14} />
-              <span>Assumir</span>
+              Assumir
             </button>
           )}
           {conversation.status === 'claimed' && (
             <button
               onClick={handleClose}
-              className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-lg"
+              className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold"
             >
               <CheckCircle2 size={14} />
-              <span>Finalizar</span>
+              Finalizar
             </button>
           )}
         </div>
       }
     >
-      <div className="flex flex-col h-full">
-        <div className="bg-white border-b border-slate-100 px-6 py-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div
-              className={`w-2 h-2 rounded-full ${
-                conversation.status === 'claimed' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
-              }`}
-            />
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-              {conversation.status}
-            </span>
+      <MessageList messages={messages} currentType="agent" conversation={conversation} />
+      <MessageInput onSend={handleSend} disabled={!canType} />
+
+      {isOpen && (
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-20">
+          <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-sm">
+            <Hand size={32} className="mx-auto mb-4 text-redoma-dark" />
+            <h3 className="font-bold mb-2">Novo Chamado</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              Assuma para iniciar o atendimento.
+            </p>
+            <button
+              onClick={handleClaim}
+              className="w-full bg-redoma-dark text-white py-3 rounded-xl font-bold"
+            >
+              Atender Cliente
+            </button>
           </div>
-          {conversation.claimedBy && (
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-              {conversation.claimedBy}
-            </span>
-          )}
         </div>
-
-        {/* ✅ passa conversation para o "Visto" funcionar */}
-        <MessageList messages={messages} currentType="agent" conversation={conversation} />
-        <MessageInput onSend={handleSend} disabled={!canType} />
-
-        {isOpen && (
-          <div className="absolute inset-0 bg-redoma-dark/20 backdrop-blur-[2px] flex items-center justify-center p-6 z-20">
-            <div className="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm border border-slate-100">
-              <div className="w-16 h-16 bg-redoma-dark/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Hand size={32} className="text-redoma-dark" />
-              </div>
-              <h3 className="font-extrabold text-redoma-dark text-lg mb-3">Novo Chamado</h3>
-              <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-                Esta comunidade aguarda um atendente. Assuma agora para iniciar o diálogo.
-              </p>
-              <button
-                onClick={handleClaim}
-                className="w-full bg-redoma-dark text-white py-4 rounded-2xl font-bold hover:bg-redoma-navy transition-all shadow-xl shadow-redoma-dark/20 uppercase tracking-widest text-xs"
-              >
-                Atender Cliente
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
     </ChatLayout>
   );
 };
