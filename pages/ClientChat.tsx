@@ -6,6 +6,7 @@ import MessageList from '../components/MessageList';
 import MessageInput from '../components/MessageInput';
 import { LayoutGrid } from 'lucide-react';
 import { supabasePublic } from '../lib/supabase';
+import { logError } from '../lib/errorLogger';
 
 const getOrCreateClientToken = () => {
   const existing = localStorage.getItem('redoma_client_token');
@@ -24,44 +25,79 @@ const ClientChat: React.FC = () => {
   // ✅ 1) Recupera conversa ativa (local) ou busca no Supabase a mais recente aberta
   useEffect(() => {
     const boot = async () => {
-      const existing = localStorage.getItem('redoma_active_conv');
-      if (existing) {
-        setConvId(existing);
-        return;
-      }
+      try {
+        const existing = localStorage.getItem('redoma_active_conv');
+        if (existing) {
+          setConvId(existing);
+          return;
+        }
 
-      const communityId = localStorage.getItem('redoma_client_cid');
-      if (!communityId) {
+        const communityId = localStorage.getItem('redoma_client_cid');
+        if (!communityId) {
+          navigate('/client/start');
+          return;
+        }
+
+        const token = getOrCreateClientToken();
+
+        const { data, error } = await supabasePublic
+          .from('conversations')
+          .select('id, status, createdAt')
+          .eq('clientToken', token)
+          .eq('communityId', communityId)
+          .neq('status', 'closed')
+          .order('createdAt', { ascending: false })
+          .limit(1);
+
+        if (error) {
+          console.error('[client recover conversation]', error);
+
+          await logError({
+            source: 'frontend',
+            environment: 'prod',
+            error_code: (error as any)?.code,
+            error_message: (error as any)?.message || 'Failed to recover conversation',
+            error_stack: (error as any)?.stack,
+            route: '/client/chat',
+            method: 'SELECT',
+            table_name: 'conversations',
+            client_token: token,
+            request_payload: { communityId },
+            extra_context: { phase: 'recover_conversation' },
+          });
+
+          navigate('/client/start');
+          return;
+        }
+
+        const recoveredId = data?.[0]?.id;
+
+        if (recoveredId) {
+          localStorage.setItem('redoma_active_conv', recoveredId);
+          setConvId(recoveredId);
+          return;
+        }
+
         navigate('/client/start');
-        return;
-      }
+      } catch (err: any) {
+        console.error('[client boot fatal]', err);
 
-      const token = getOrCreateClientToken();
+        const token = localStorage.getItem('redoma_client_token') || undefined;
+        const communityId = localStorage.getItem('redoma_client_cid') || undefined;
 
-      const { data, error } = await supabasePublic
-        .from('conversations')
-        .select('id, status, createdAt')
-        .eq('clientToken', token)
-        .eq('communityId', communityId)
-        .neq('status', 'closed')
-        .order('createdAt', { ascending: false })
-        .limit(1);
+        await logError({
+          source: 'frontend',
+          environment: 'prod',
+          error_message: err?.message || 'ClientChat boot fatal error',
+          error_stack: err?.stack,
+          route: '/client/chat',
+          client_token: token,
+          request_payload: { communityId },
+          extra_context: { phase: 'boot_catch' },
+        });
 
-      if (error) {
-        console.error('[client recover conversation]', error);
         navigate('/client/start');
-        return;
       }
-
-      const recoveredId = data?.[0]?.id;
-
-      if (recoveredId) {
-        localStorage.setItem('redoma_active_conv', recoveredId);
-        setConvId(recoveredId);
-        return;
-      }
-
-      navigate('/client/start');
     };
 
     boot();
@@ -81,6 +117,21 @@ const ClientChat: React.FC = () => {
 
       if (error) {
         console.error('[client mark seen rpc]', error);
+
+        await logError({
+          source: 'frontend',
+          environment: 'prod',
+          error_code: (error as any)?.code,
+          error_message: (error as any)?.message || 'mark_client_seen RPC failed',
+          error_stack: (error as any)?.stack,
+          route: '/client/chat',
+          method: 'RPC',
+          function_name: 'mark_client_seen',
+          client_token: token,
+          request_payload: { convId },
+          extra_context: { phase: 'mark_seen' },
+        });
+
         return;
       }
 
@@ -89,6 +140,19 @@ const ClientChat: React.FC = () => {
         console.warn('[client mark seen rpc] NÃO atualizou (0 rows). Token/coluna não bateu.', {
           convId,
           token,
+        });
+
+        await logError({
+          source: 'frontend',
+          environment: 'prod',
+          error_code: 'NO_ROWS_UPDATED',
+          error_message: 'mark_client_seen returned 0 rows updated (token/where mismatch)',
+          route: '/client/chat',
+          method: 'RPC',
+          function_name: 'mark_client_seen',
+          client_token: token,
+          request_payload: { convId },
+          extra_context: { returned: data },
         });
       }
     };
@@ -103,8 +167,26 @@ const ClientChat: React.FC = () => {
   const conversation = getConversation(convId);
   const messages = getMessages(convId);
 
-  const handleSend = (text: string) => {
-    addMessage(convId, text, 'client');
+  const handleSend = async (text: string) => {
+    try {
+      addMessage(convId, text, 'client');
+    } catch (err: any) {
+      console.error('[client send message]', err);
+
+      const token = localStorage.getItem('redoma_client_token') || undefined;
+
+      await logError({
+        source: 'frontend',
+        environment: 'prod',
+        error_message: err?.message || 'Failed to send message',
+        error_stack: err?.stack,
+        route: '/client/chat',
+        method: 'LOCAL',
+        client_token: token,
+        request_payload: { convId, textPreview: text?.slice?.(0, 120) },
+        extra_context: { phase: 'handleSend' },
+      });
+    }
   };
 
   return (
