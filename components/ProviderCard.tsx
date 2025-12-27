@@ -16,9 +16,9 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ provider }) => {
         
         {/* LOGO OU LETRA */}
         <div className="w-12 h-12 rounded-xl flex items-center justify-center border border-slate-100 bg-slate-50 overflow-hidden group-hover:bg-redoma-light transition-colors">
-          {provider.logoUrl ? (
+          {provider.logo_url ? (
             <img
-              src={provider.logoUrl}
+              src={provider.logo_url}
               alt={provider.name}
               className="w-full h-full object-cover"
             />

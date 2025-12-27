@@ -22,7 +22,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Parte do valor retorna para o fundo da sua comunidade.',
     link: 'https://www.mercadolivre.com.br',
-    logoUrl: null,
+    logo_url: null,
     isActive: true,
   },
   {
@@ -33,7 +33,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Ajude sua comunidade comprando na Shopee.',
     link: 'https://shopee.com.br',
-    logoUrl: null,
+    logo_url: null,
     isActive: true,
   },
   {
@@ -44,7 +44,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Serviço premium com benefício direto para a comunidade.',
     link: '#',
-    logoUrl: null,
+    logo_url: null,
     isActive: true,
   },
 ];

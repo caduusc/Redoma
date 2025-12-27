@@ -67,7 +67,7 @@ export interface Provider {
   link: string;
 
   // logo opcional no Storage
-  logoUrl?: string | null;
+  logo_url?: string | null;
 
   isActive: boolean;
   createdAt: string;
