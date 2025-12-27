@@ -15,6 +15,7 @@ const AgentChat: React.FC = () => {
     getConversation,
     getMessages,
     addMessage,
+    sendImageMessage,
     claimConversation,
     closeConversation,
     currentUser,
@@ -56,6 +57,10 @@ const AgentChat: React.FC = () => {
 
   const handleSend = async (text: string) => {
     await addMessage(conversationId, text, 'agent');
+  };
+
+  const handleSendImage = async (file: File) => {
+    await sendImageMessage(conversationId, file, 'agent');
   };
 
   const handleClaim = async () => {
@@ -105,15 +110,16 @@ const AgentChat: React.FC = () => {
     >
       {/* ✅ Wrapper garante que existe "área de mensagens" + "footer input" */}
       <div className="flex flex-col h-full min-h-0 relative">
-        {/* ✅ área scrollável */}
+        {/* área scrollável */}
         <div className="flex-1 min-h-0">
           <MessageList messages={messages} currentType="agent" conversation={conversation} />
         </div>
 
-        {/* ✅ footer sempre visível */}
+        {/* footer sempre visível */}
         <div className="shrink-0 border-t border-slate-100 bg-white">
           <MessageInput
             onSend={handleSend}
+            onSendImage={handleSendImage}
             disabled={!canType}
           />
         </div>

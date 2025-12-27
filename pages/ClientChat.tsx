@@ -19,7 +19,7 @@ const getOrCreateClientToken = () => {
 
 const ClientChat: React.FC = () => {
   const navigate = useNavigate();
-  const { getConversation, getMessages, addMessage } = useChat();
+  const { getConversation, getMessages, addMessage, sendImageMessage } = useChat();
   const [convId, setConvId] = useState<string | null>(null);
 
   // ✅ 1) Recupera conversa ativa (local) ou busca no Supabase a mais recente aberta
@@ -135,7 +135,6 @@ const ClientChat: React.FC = () => {
         return;
       }
 
-      // data deve ser 1 (atualizou) ou 0 (não bateu no WHERE)
       if (data === 0) {
         console.warn('[client mark seen rpc] NÃO atualizou (0 rows). Token/coluna não bateu.', {
           convId,
@@ -169,7 +168,7 @@ const ClientChat: React.FC = () => {
 
   const handleSend = async (text: string) => {
     try {
-      addMessage(convId, text, 'client');
+      await addMessage(convId, text, 'client');
     } catch (err: any) {
       console.error('[client send message]', err);
 
@@ -185,6 +184,29 @@ const ClientChat: React.FC = () => {
         client_token: token,
         request_payload: { convId, textPreview: text?.slice?.(0, 120) },
         extra_context: { phase: 'handleSend' },
+      });
+    }
+  };
+
+  const handleSendImage = async (file: File) => {
+    if (!convId) return;
+    try {
+      await sendImageMessage(convId, file, 'client');
+    } catch (err: any) {
+      console.error('[client send image]', err);
+
+      const token = localStorage.getItem('redoma_client_token') || undefined;
+
+      await logError({
+        source: 'frontend',
+        environment: 'prod',
+        error_message: err?.message || 'Failed to send image',
+        error_stack: err?.stack,
+        route: '/client/chat',
+        method: 'LOCAL',
+        client_token: token,
+        request_payload: { convId, fileName: file.name, fileSize: file.size },
+        extra_context: { phase: 'handleSendImage' },
       });
     }
   };
@@ -213,7 +235,11 @@ const ClientChat: React.FC = () => {
         </div>
 
         <MessageList messages={messages} currentType="client" conversation={conversation} />
-        <MessageInput onSend={handleSend} disabled={conversation?.status === 'closed'} />
+        <MessageInput
+          onSend={handleSend}
+          onSendImage={handleSendImage}
+          disabled={conversation?.status === 'closed'}
+        />
       </div>
     </ChatLayout>
   );

@@ -8,6 +8,7 @@ import React, {
 } from 'react';
 import { Conversation, Message, User, SenderType } from '../types';
 import { supabasePublic, supabaseSupport } from '../lib/supabase';
+import { uploadChatImage } from '../lib/uploadChatImage';
 
 interface ChatContextType {
   conversations: Conversation[];
@@ -18,7 +19,19 @@ interface ChatContextType {
   logout: () => void;
 
   createConversation: (communityId: string) => Promise<string>;
-  addMessage: (conversationId: string, text: string, senderType: SenderType) => Promise<void>;
+
+  addMessage: (
+    conversationId: string,
+    text: string,
+    senderType: SenderType
+  ) => Promise<void>;
+
+  sendImageMessage: (
+    conversationId: string,
+    file: File,
+    senderType: SenderType
+  ) => Promise<void>;
+
   claimConversation: (conversationId: string) => Promise<void>;
   closeConversation: (conversationId: string) => Promise<void>;
 
@@ -100,7 +113,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .on(
             'postgres_changes' as any,
             { event: '*', schema: 'public', table: 'conversations' },
-            (p: any) => upsertConversation(p.new)
+            (p: any) => upsertConversation(p.new as Conversation)
           )
           .subscribe();
 
@@ -109,7 +122,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .on(
             'postgres_changes' as any,
             { event: 'INSERT', schema: 'public', table: 'messages' },
-            (p: any) => upsertMessage(p.new)
+            (p: any) => upsertMessage(p.new as Message)
           )
           .subscribe();
 
@@ -163,7 +176,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const conv = {
       id,
       communityId,
-      status: 'open',
+      status: 'open' as const,
       claimedBy: null,
       createdAt: new Date().toISOString(),
       clientToken,
@@ -175,13 +188,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return id;
   };
 
-  const addMessage = async (conversationId: string, text: string, senderType: SenderType) => {
+  const addMessage = async (
+    conversationId: string,
+    text: string,
+    senderType: SenderType
+  ) => {
     const clientToken = getOrCreateClientToken();
-    const msg = {
+    const msg: Message = {
       id: crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2),
       conversationId,
-      text,
       senderType,
+      messageType: 'text',
+      text,
       clientToken,
       createdAt: new Date().toISOString(),
     };
@@ -190,7 +208,42 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { error } = await client.from('messages').insert(msg);
     if (error) throw error;
 
-    if (senderType !== 'agent') upsertMessage(msg as any);
+    if (senderType !== 'agent') upsertMessage(msg);
+  };
+
+  const sendImageMessage = async (
+    conversationId: string,
+    file: File,
+    senderType: SenderType
+  ) => {
+    const clientToken = getOrCreateClientToken();
+
+    // 1) upload pro Storage
+    const { publicUrl, path } = await uploadChatImage({
+      file,
+      conversationId,
+      senderType,
+    });
+
+    // 2) criar mensagem do tipo imagem
+    const msg: Message = {
+      id: crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2),
+      conversationId,
+      senderType,
+      messageType: 'image',
+      text: '',
+      imageUrl: publicUrl,
+      storagePath: path,
+      clientToken,
+      createdAt: new Date().toISOString(),
+    };
+
+    const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
+    const { error } = await client.from('messages').insert(msg);
+    if (error) throw error;
+
+    // otimista só pro cliente
+    if (senderType !== 'agent') upsertMessage(msg);
   };
 
   const claimConversation = async (conversationId: string) => {
@@ -234,6 +287,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         createConversation,
         addMessage,
+        sendImageMessage,
         claimConversation,
         closeConversation,
         getConversation,

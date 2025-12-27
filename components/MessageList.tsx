@@ -51,21 +51,22 @@ const MessageList: React.FC<MessageListProps> = ({ messages, currentType, conver
     currentType === 'agent' ? conversation?.last_client_seen_at : conversation?.last_agent_seen_at;
 
   return (
-    <div
-      ref={scrollRef}
-      className="h-full overflow-y-auto p-6 space-y-6 bg-white"
-    >
+    <div ref={scrollRef} className="h-full overflow-y-auto p-6 space-y-6 bg-white">
       {messages.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-slate-300 space-y-3">
           <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center border border-slate-100">
             <div className="w-1.5 h-1.5 bg-slate-200 rounded-full animate-bounce" />
           </div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Aguardando mensagens...</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">
+            Aguardando mensagens...
+          </p>
         </div>
       ) : (
         messages.map((msg) => {
           const isOwn = msg.senderType === currentType;
           const isLastOwn = isOwn && msg.id === lastOwnMsgId;
+          const isImage = msg.messageType === 'image';
+          const textContent = msg.text || '';
 
           const wasSeen =
             !!(isLastOwn && otherSeenAt) &&
@@ -80,15 +81,44 @@ const MessageList: React.FC<MessageListProps> = ({ messages, currentType, conver
                     : 'bg-slate-50 text-slate-700 border border-slate-100 rounded-tl-none'
                 }`}
               >
-                <p>{renderTextWithLinks(msg.text)}</p>
+                {/* imagem, se tiver */}
+                {isImage && msg.imageUrl && (
+                  <div className={textContent ? 'mb-2' : ''}>
+                    <a
+                      href={msg.imageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <img
+                        src={msg.imageUrl}
+                        alt="Anexo"
+                        className="max-h-64 rounded-xl border border-white/10 object-contain"
+                      />
+                    </a>
+                  </div>
+                )}
+
+                {/* texto (se existir) */}
+                {textContent && <p>{renderTextWithLinks(textContent)}</p>}
 
                 <div className="mt-2 flex items-center justify-end gap-2">
-                  <span className={`text-[10px] font-bold ${isOwn ? 'text-white/60' : 'text-slate-400'}`}>
-                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <span
+                    className={`text-[10px] font-bold ${
+                      isOwn ? 'text-white/60' : 'text-slate-400'
+                    }`}
+                  >
+                    {new Date(msg.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
                   </span>
 
                   {isLastOwn && (
-                    <span className={`text-[10px] font-bold ${wasSeen ? 'text-sky-300' : 'text-white/60'}`}>
+                    <span
+                      className={`text-[10px] font-bold ${
+                        wasSeen ? 'text-sky-300' : 'text-white/60'
+                      }`}
+                    >
                       ✓✓
                     </span>
                   )}

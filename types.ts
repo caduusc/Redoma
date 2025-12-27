@@ -7,24 +7,38 @@ export interface Conversation {
   claimedBy?: string | null;
   createdAt: string;
 
-  // ✅ para "Visto" (check azul)
+  // ✅ "visto"
   last_client_seen_at?: string | null;
   last_agent_seen_at?: string | null;
 
-  // (opcional, mas existe no seu insert de createConversation / addMessage)
+  // token do cliente (anon)
   clientToken?: string | null;
 }
 
 export type SenderType = 'client' | 'agent';
 
+export type MessageType = 'text' | 'image';
+
 export interface Message {
   id: string;
   conversationId: string;
   senderType: SenderType;
-  text: string;
+
+  // 👉 tipo da mensagem
+  messageType: MessageType;
+
+  // 👉 texto (quando messageType = 'text')
+  text?: string;
+
+  // 👉 imagem (quando messageType = 'image')
+  imageUrl?: string | null;
+  imageThumbUrl?: string | null;
+
+  // caminho original no bucket (bom pra deletar futuramente)
+  storagePath?: string | null;
+
   createdAt: string;
 
-  // (opcional, mas existe no seu insert de addMessage)
   clientToken?: string | null;
 }
 
