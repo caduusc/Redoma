@@ -7,11 +7,9 @@ export interface Conversation {
   claimedBy?: string | null;
   createdAt: string;
 
-  // controle de "visto" nos lados cliente / agente
   last_client_seen_at?: string | null;
   last_agent_seen_at?: string | null;
 
-  // token anônimo do cliente
   clientToken?: string | null;
 }
 
@@ -24,22 +22,17 @@ export interface Message {
   conversationId: string;
   senderType: SenderType;
 
-  // tipo de mensagem
   messageType: MessageType;
 
-  // texto (quando messageType = 'text')
   text?: string;
 
-  // imagem (quando messageType = 'image')
   imageUrl?: string | null;
   imageThumbUrl?: string | null;
 
-  // caminho original no bucket
   storagePath?: string | null;
 
   createdAt: string;
 
-  // para identificar mensagens do mesmo cliente anônimo
   clientToken?: string | null;
 }
 
@@ -66,8 +59,8 @@ export interface Provider {
   revenueShareText: string;
   link: string;
 
-  // logo opcional no Storage
-  logo_url?: string | null;
+  // url pública da logo (vem de logo_url no banco)
+  logoUrl?: string | null;
 
   isActive: boolean;
   createdAt: string;

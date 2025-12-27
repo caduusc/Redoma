@@ -13,6 +13,7 @@ interface ProviderContextType {
 
 const ProviderContext = createContext<ProviderContextType | undefined>(undefined);
 
+// Seed inicial (front usa logoUrl; DB usa logo_url)
 const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
     name: 'Mercado Livre',
@@ -22,7 +23,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Parte do valor retorna para o fundo da sua comunidade.',
     link: 'https://www.mercadolivre.com.br',
-    logo_url: null,
+    logoUrl: null,
     isActive: true,
   },
   {
@@ -33,7 +34,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Ajude sua comunidade comprando na Shopee.',
     link: 'https://shopee.com.br',
-    logo_url: null,
+    logoUrl: null,
     isActive: true,
   },
   {
@@ -44,13 +45,31 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Serviço premium com benefício direto para a comunidade.',
     link: '#',
-    logo_url: null,
+    logoUrl: null,
     isActive: true,
   },
 ];
 
 export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [providers, setProviders] = useState<Provider[]>([]);
+
+  // converte o formato do banco (logo_url) para o tipo Provider (logoUrl)
+  const normalizeRows = (rows: any[]): Provider[] => {
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      category: row.category,
+      description: row.description,
+      cashbackPercent: row.cashbackPercent,
+      revenueShareText: row.revenueShareText,
+      link: row.link ?? '',
+      logoUrl: row.logo_url ?? null,
+      isActive: row.isActive,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }));
+  };
 
   useEffect(() => {
     let subscription: any;
@@ -64,34 +83,43 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       if (data && data.length > 0) {
-        setProviders(data as Provider[]);
+        setProviders(normalizeRows(data));
         return;
       }
 
       // Seed se tabela estiver vazia
+      const nowIso = new Date().toISOString();
+      const seedPayload = SEED_PROVIDERS.map((p) => ({
+        id:
+          typeof crypto !== 'undefined' &&
+          'randomUUID' in crypto &&
+          crypto.randomUUID()
+            ? crypto.randomUUID()
+            : Math.random().toString(36).slice(2, 11),
+        name: p.name,
+        type: p.type,
+        category: p.category,
+        description: p.description,
+        cashbackPercent: p.cashbackPercent,
+        revenueShareText: p.revenueShareText,
+        link: p.link,
+        logo_url: p.logoUrl ?? null,
+        isActive: p.isActive,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      }));
+
       const { data: seeded, error: seedErr } = await supabaseMaster
         .from('providers')
-        .insert(
-          SEED_PROVIDERS.map((p) => ({
-            ...p,
-            id:
-              typeof crypto !== 'undefined' &&
-              'randomUUID' in crypto &&
-              crypto.randomUUID()
-                ? crypto.randomUUID()
-                : Math.random().toString(36).slice(2, 11),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }))
-        )
-        .select();
+        .insert(seedPayload)
+        .select('*');
 
       if (seedErr) {
         console.error('[ProviderContext seed providers]', seedErr);
         return;
       }
 
-      if (seeded) setProviders(seeded as Provider[]);
+      if (seeded) setProviders(normalizeRows(seeded));
     };
 
     fetchProviders();
@@ -104,7 +132,7 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         { event: '*', schema: 'public', table: 'providers' },
         async () => {
           const { data, error } = await supabaseMaster.from('providers').select('*');
-          if (!error && data) setProviders(data as Provider[]);
+          if (!error && data) setProviders(normalizeRows(data));
         }
       )
       .subscribe();
@@ -115,26 +143,42 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const addProvider = async (p: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newP: Provider = {
-      ...p,
+    const nowIso = new Date().toISOString();
+
+    const { logoUrl, ...rest } = p;
+
+    const payload: any = {
+      ...rest,
+      logo_url: logoUrl ?? null,
       id:
         typeof crypto !== 'undefined' &&
         'randomUUID' in crypto &&
         crypto.randomUUID()
           ? crypto.randomUUID()
           : Math.random().toString(36).slice(2, 11),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
-    const { error } = await supabaseMaster.from('providers').insert([newP]);
+    const { error } = await supabaseMaster.from('providers').insert([payload]);
     if (error) console.error('[ProviderContext addProvider]', error);
   };
 
   const updateProvider = async (id: string, p: Partial<Provider>) => {
+    const { logoUrl, ...rest } = p;
+
+    const payload: any = {
+      ...rest,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (logoUrl !== undefined) {
+      payload.logo_url = logoUrl;
+    }
+
     const { error } = await supabaseMaster
       .from('providers')
-      .update({ ...p, updatedAt: new Date().toISOString() })
+      .update(payload)
       .eq('id', id);
 
     if (error) console.error('[ProviderContext updateProvider]', error);
