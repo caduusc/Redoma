@@ -382,7 +382,7 @@ const AdminProviders: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Parte do valor retorna para o seu condomínio..."
+                  placeholder="Ex: Parte do valor retorna para a sua comunidade..."
                   value={formData.revenueShareText}
                   onChange={(e) =>
                     setFormData({
