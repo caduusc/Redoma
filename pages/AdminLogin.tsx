@@ -67,7 +67,9 @@ const AdminLogin: React.FC = () => {
       <div className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-white/5">
         <div className="p-10 border-b border-slate-50 text-center bg-slate-50/50">
           <Logo size={48} className="mb-4" />
-          <h1 className="text-xl font-bold text-redoma-dark tracking-tight">Redoma Central Control</h1>
+          <h1 className="text-xl font-bold text-redoma-dark tracking-tight">
+            Redoma Central Control
+          </h1>
           <p className="text-slate-400 text-[10px] mt-1 font-extrabold uppercase tracking-[0.2em]">
             Gestão de Ecossistema
           </p>
@@ -83,9 +85,10 @@ const AdminLogin: React.FC = () => {
               placeholder="admin@redoma.tech"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-redoma-dark focus:outline-none transition-all bg-slate-50/50"
+              className="w-full px-5 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-redoma-dark focus:outline-none transition-all bg-slate-50/50 text-[16px]"
               required
               autoComplete="email"
+              inputMode="email"
             />
           </div>
 
@@ -98,7 +101,7 @@ const AdminLogin: React.FC = () => {
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-5 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-redoma-dark focus:outline-none transition-all bg-slate-50/50"
+              className="w-full px-5 py-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-redoma-dark focus:outline-none transition-all bg-slate-50/50 text-[16px]"
               required
               autoComplete="current-password"
             />
