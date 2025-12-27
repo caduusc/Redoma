@@ -53,7 +53,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
 export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [providers, setProviders] = useState<Provider[]>([]);
 
-  // converte o formato do banco (logo_url) para o tipo Provider (logoUrl)
+  // Converte linhas do banco (logo_url) para o tipo Provider (logoUrl)
   const normalizeRows = (rows: any[]): Provider[] => {
     return rows.map((row) => ({
       id: row.id,
@@ -144,7 +144,6 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const addProvider = async (p: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>) => {
     const nowIso = new Date().toISOString();
-
     const { logoUrl, ...rest } = p;
 
     const payload: any = {

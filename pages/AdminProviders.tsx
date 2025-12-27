@@ -31,7 +31,7 @@ const AdminProviders: React.FC = () => {
     revenueShareText: '',
     link: '',
     isActive: true,
-    logoUrl: '',
+    logoUrl: null,
   });
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -49,7 +49,7 @@ const AdminProviders: React.FC = () => {
       revenueShareText: '',
       link: '',
       isActive: true,
-      logoUrl: '',
+      logoUrl: null,
     });
     setLogoFile(null);
     setLogoPreview(null);
@@ -67,7 +67,7 @@ const AdminProviders: React.FC = () => {
         revenueShareText: p.revenueShareText,
         link: p.link,
         isActive: p.isActive,
-        logoUrl: p.logoUrl ?? '',
+        logoUrl: p.logoUrl ?? null,
       });
       setLogoFile(null);
       setLogoPreview(p.logoUrl ?? null);
@@ -89,14 +89,21 @@ const AdminProviders: React.FC = () => {
     e.preventDefault();
 
     try {
-      let finalLogoUrl = formData.logoUrl || '';
+      let finalLogoUrl: string | null = formData.logoUrl ?? null;
 
+      // Upload da logo é opcional. Se der erro, apenas loga
       if (logoFile) {
-        const { publicUrl } = await uploadProviderLogo({
-          file: logoFile,
-          providerId: editingProvider?.id,
-        });
-        finalLogoUrl = publicUrl;
+        try {
+          const { publicUrl } = await uploadProviderLogo({
+            file: logoFile,
+            providerId: editingProvider?.id,
+          });
+          finalLogoUrl = publicUrl;
+        } catch (logoErr) {
+          console.error('[AdminProviders] erro ao fazer upload da logo', logoErr);
+          // Opcional: você pode avisar o usuário sem travar o save:
+          // alert('Não foi possível enviar a logo, mas os dados do fornecedor foram salvos.');
+        }
       }
 
       const payload: ProviderFormData = {
@@ -113,7 +120,7 @@ const AdminProviders: React.FC = () => {
       setIsModalOpen(false);
       resetForm();
     } catch (err) {
-      console.error('[AdminProviders handleSubmit] error', err);
+      console.error('[AdminProviders handleSubmit] error ao salvar provider', err);
       alert('Erro ao salvar fornecedor. Tente novamente.');
     }
   };
