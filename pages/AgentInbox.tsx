@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import ChatLayout from '../components/ChatLayout';
-import { ConversationStatus } from '../types';
+import { ConversationStatus, Conversation } from '../types';
 import { MessageSquare, Clock, User, LogOut } from 'lucide-react';
 import { supabaseSupport } from '../lib/supabase';
 
 const AgentInbox: React.FC = () => {
-  const { conversations, logout, currentUser } = useChat();
+  const { conversations, messages, logout, currentUser } = useChat();
   const [filter, setFilter] = useState<ConversationStatus>('open');
   const navigate = useNavigate();
 
@@ -26,9 +26,23 @@ const AgentInbox: React.FC = () => {
     try {
       await supabaseSupport.auth.signOut();
     } finally {
-      logout(); // limpa redoma_current_user
+      logout();
       navigate('/agent/login', { replace: true });
     }
+  };
+
+  // 🔔 helper: verifica se há msg do cliente mais nova que o last_agent_seen_at
+  const hasUnreadFromClient = (conv: Conversation) => {
+    const lastSeenTs = conv.last_agent_seen_at
+      ? new Date(conv.last_agent_seen_at).getTime()
+      : 0;
+
+    return messages.some(
+      (m) =>
+        m.conversationId === conv.id &&
+        m.senderType === 'client' &&
+        new Date(m.createdAt).getTime() > lastSeenTs
+    );
   };
 
   const filteredConversations = conversations.filter((c) => {
@@ -88,51 +102,71 @@ const AgentInbox: React.FC = () => {
           {filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-200">
               <MessageSquare size={40} className="mb-4 opacity-50" />
-              <p className="font-bold text-[10px] uppercase tracking-[0.2em]">Sem conversas</p>
+              <p className="font-bold text-[10px] uppercase tracking-[0.2em]">
+                Sem conversas
+              </p>
             </div>
           ) : (
             filteredConversations
-              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-              .map((conv) => (
-                <div
-                  key={conv.id}
-                  onClick={() => navigate(`/agent/chat/${conv.id}`)}
-                  className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-redoma-dark/5 hover:border-redoma-glow transition-all cursor-pointer group relative overflow-hidden"
-                >
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-redoma-dark opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="flex justify-between items-start mb-3">
-                    <span className="font-bold text-slate-800 group-hover:text-redoma-dark transition-colors">
-                      {conv.communityId}
-                    </span>
-                    <span
-                      className={`text-[9px] px-2 py-0.5 rounded-md font-extrabold uppercase border ${getStatusColor(
-                        conv.status
-                      )}`}
-                    >
-                      {conv.status}
-                    </span>
-                  </div>
+              .sort(
+                (a, b) =>
+                  new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+              )
+              .map((conv) => {
+                const unread = hasUnreadFromClient(conv);
 
-                  <div className="flex items-center gap-4 text-[11px] text-slate-400 font-bold uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5">
-                      <Clock size={12} className="text-redoma-steel" />
-                      <span>
-                        {new Date(conv.createdAt).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => navigate(`/agent/chat/${conv.id}`)}
+                    className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-redoma-dark/5 hover:border-redoma-glow transition-all cursor-pointer group relative overflow-hidden"
+                  >
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-redoma-dark opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                    <div className="flex justify-between items-start mb-3">
+                      <span className="font-bold text-slate-800 group-hover:text-redoma-dark transition-colors">
+                        {conv.communityId}
                       </span>
+
+                      <div className="flex items-center gap-2">
+                        {unread && conv.status !== 'closed' && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[9px] font-extrabold uppercase tracking-[0.16em]">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                            Novo
+                          </span>
+                        )}
+
+                        <span
+                          className={`text-[9px] px-2 py-0.5 rounded-md font-extrabold uppercase border ${getStatusColor(
+                            conv.status
+                          )}`}
+                        >
+                          {conv.status}
+                        </span>
+                      </div>
                     </div>
 
-                    {conv.claimedBy && (
+                    <div className="flex items-center gap-4 text-[11px] text-slate-400 font-bold uppercase tracking-wider">
                       <div className="flex items-center gap-1.5">
-                        <User size={12} className="text-redoma-steel" />
-                        <span>{conv.claimedBy}</span>
+                        <Clock size={12} className="text-redoma-steel" />
+                        <span>
+                          {new Date(conv.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
                       </div>
-                    )}
+
+                      {conv.claimedBy && (
+                        <div className="flex items-center gap-1.5">
+                          <User size={12} className="text-redoma-steel" />
+                          <span>{conv.claimedBy}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
           )}
         </div>
       </div>

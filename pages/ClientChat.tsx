@@ -166,6 +166,17 @@ const ClientChat: React.FC = () => {
   const conversation = getConversation(convId);
   const messages = getMessages(convId);
 
+  // 🔔 existe mensagem do agente mais nova que o last_client_seen_at?
+  const lastClientSeenTs = conversation?.last_client_seen_at
+    ? new Date(conversation.last_client_seen_at).getTime()
+    : 0;
+
+  const hasUnreadFromAgent = messages.some(
+    (m) =>
+      m.senderType === 'agent' &&
+      new Date(m.createdAt).getTime() > lastClientSeenTs
+  );
+
   const handleSend = async (text: string) => {
     try {
       await addMessage(convId, text, 'client');
@@ -230,8 +241,16 @@ const ClientChat: React.FC = () => {
       }
     >
       <div className="flex flex-col h-full">
-        <div className="bg-indigo-50 border-b border-indigo-100 px-4 py-2 text-[10px] text-indigo-600 font-bold text-center uppercase tracking-[0.15em]">
-          Suporte Redoma Ativo
+        {/* Banner topo + badge de nova resposta */}
+        <div className="bg-indigo-50 border-b border-indigo-100 px-4 py-2 text-[10px] text-indigo-600 font-bold text-center uppercase tracking-[0.15em] flex items-center justify-center gap-3">
+          <span>Suporte Redoma Ativo</span>
+
+          {hasUnreadFromAgent && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[9px] font-extrabold tracking-[0.18em]">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              Nova resposta
+            </span>
+          )}
         </div>
 
         <MessageList messages={messages} currentType="client" conversation={conversation} />
