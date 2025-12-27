@@ -176,7 +176,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .order('createdAt', { ascending: true });
         if (msgs) setMessages(msgs as Message[]);
 
-        // 🔴 realtime pro cliente: conversa + mensagens
+        // realtime pro cliente: conversa + mensagens
         convChannel = supabasePublic
           .channel(`client_conversations_${activeConvId}`)
           .on(
@@ -269,14 +269,26 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
-    const { error } = await client.from('messages').insert(msg);
-    if (error) throw error;
 
+    // 🔹 sempre plota localmente (optimistic)
     if (senderType !== 'agent') {
-      // otimista pro cliente
       upsertMessage(msg);
-      // e logo depois, refetch pra puxar a auto-resposta do agente
-      await refreshMessages(conversationId);
+    }
+
+    try {
+      const { error } = await client.from('messages').insert(msg);
+      if (error) {
+        console.error('[addMessage] insert error', error);
+        // se quiser, aqui dá pra remover a msg otimista em caso de erro
+        return;
+      }
+
+      // cliente: refetch pra trazer auto-resposta + alinhar ordem
+      if (senderType !== 'agent') {
+        await refreshMessages(conversationId);
+      }
+    } catch (err) {
+      console.error('[addMessage] fatal', err);
     }
   };
 
@@ -314,21 +326,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
-    const { error } = await client.from('messages').insert(msg);
-
-    if (error) {
-      console.error('[sendImageMessage REAL] insert error', error);
-      throw error;
-    }
 
     if (senderType !== 'agent') {
-      // otimista pro cliente
       upsertMessage(msg);
-      // refetch pra puxar auto-resposta também quando o primeiro contato é por imagem
-      await refreshMessages(conversationId);
     }
 
-    console.log('[sendImageMessage REAL] mensagem de imagem inserida com sucesso');
+    try {
+      const { error } = await client.from('messages').insert(msg);
+
+      if (error) {
+        console.error('[sendImageMessage REAL] insert error', error);
+        return;
+      }
+
+      if (senderType !== 'agent') {
+        await refreshMessages(conversationId);
+      }
+
+      console.log('[sendImageMessage REAL] mensagem de imagem inserida com sucesso');
+    } catch (err) {
+      console.error('[sendImageMessage REAL] fatal', err);
+    }
   };
 
   const claimConversation = async (conversationId: string) => {
