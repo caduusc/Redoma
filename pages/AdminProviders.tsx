@@ -257,10 +257,10 @@ const AdminProviders: React.FC = () => {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-white/20 animate-in fade-in slide-in-from-bottom-4 duration-200">
-            <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-slate-800">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-6 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white w-full md:max-w-2xl max-h-[90vh] rounded-t-3xl md:rounded-3xl shadow-2xl overflow-y-auto border border-white/20 animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="px-6 py-6 md:px-8 md:py-8 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+              <h3 className="text-lg md:text-xl font-bold text-slate-800">
                 {editingProvider ? 'Editar Fornecedor' : 'Novo Fornecedor'}
               </h3>
               <button
@@ -273,7 +273,7 @@ const AdminProviders: React.FC = () => {
 
             <form
               onSubmit={handleSubmit}
-              className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6"
+              className="px-6 py-6 md:px-8 md:py-8 grid grid-cols-1 md:grid-cols-2 gap-6"
             >
               <div className="space-y-1 md:col-span-2">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
@@ -382,7 +382,7 @@ const AdminProviders: React.FC = () => {
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Parte do valor retorna para a sua comunidade..."
+                  placeholder="Ex: Parte do valor retorna para o seu condomínio..."
                   value={formData.revenueShareText}
                   onChange={(e) =>
                     setFormData({
