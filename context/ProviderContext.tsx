@@ -22,6 +22,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Parte do valor retorna para o fundo da sua comunidade.',
     link: 'https://www.mercadolivre.com.br',
+    logoUrl: null,
     isActive: true,
   },
   {
@@ -32,6 +33,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Ajude sua comunidade comprando na Shopee.',
     link: 'https://shopee.com.br',
+    logoUrl: null,
     isActive: true,
   },
   {
@@ -42,6 +44,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Serviço premium com benefício direto para a comunidade.',
     link: '#',
+    logoUrl: null,
     isActive: true,
   },
 ];
@@ -65,14 +68,16 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
 
-      // Seed se vazio
+      // Seed se tabela estiver vazia
       const { data: seeded, error: seedErr } = await supabaseMaster
         .from('providers')
         .insert(
           SEED_PROVIDERS.map((p) => ({
             ...p,
             id:
-              (typeof crypto !== 'undefined' && 'randomUUID' in crypto && crypto.randomUUID())
+              typeof crypto !== 'undefined' &&
+              'randomUUID' in crypto &&
+              crypto.randomUUID()
                 ? crypto.randomUUID()
                 : Math.random().toString(36).slice(2, 11),
             createdAt: new Date().toISOString(),
@@ -85,18 +90,23 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         console.error('[ProviderContext seed providers]', seedErr);
         return;
       }
+
       if (seeded) setProviders(seeded as Provider[]);
     };
 
     fetchProviders();
 
-    // Realtime: qualquer mudança em providers -> refetch (admin CRUD)
+    // Realtime: qualquer mudança em providers -> refetch
     subscription = supabaseMaster
       .channel('providers_channel')
-      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'providers' }, async () => {
-        const { data, error } = await supabaseMaster.from('providers').select('*');
-        if (!error && data) setProviders(data as Provider[]);
-      })
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'providers' },
+        async () => {
+          const { data, error } = await supabaseMaster.from('providers').select('*');
+          if (!error && data) setProviders(data as Provider[]);
+        }
+      )
       .subscribe();
 
     return () => {
@@ -105,10 +115,12 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const addProvider = async (p: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const newP = {
+    const newP: Provider = {
       ...p,
       id:
-        (typeof crypto !== 'undefined' && 'randomUUID' in crypto && crypto.randomUUID())
+        typeof crypto !== 'undefined' &&
+        'randomUUID' in crypto &&
+        crypto.randomUUID()
           ? crypto.randomUUID()
           : Math.random().toString(36).slice(2, 11),
       createdAt: new Date().toISOString(),
@@ -135,7 +147,9 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const toggleActive = async (id: string) => {
     const p = providers.find((item) => item.id === id);
-    if (p) await updateProvider(id, { isActive: !p.isActive });
+    if (p) {
+      await updateProvider(id, { isActive: !p.isActive });
+    }
   };
 
   const getActiveProviders = () => providers.filter((p) => p.isActive);
@@ -151,6 +165,8 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 export const useProviders = () => {
   const context = useContext(ProviderContext);
-  if (!context) throw new Error('useProviders must be used within a ProviderProvider');
+  if (!context) {
+    throw new Error('useProviders must be used within a ProviderProvider');
+  }
   return context;
 };

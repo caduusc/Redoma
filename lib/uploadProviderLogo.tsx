@@ -1,35 +1,46 @@
 // src/lib/uploadProviderLogo.ts
-import { supabaseMaster } from './supabase';
+import { supabaseMaster } from '../lib/supabase';
 
-interface UploadProviderLogoParams {
-  file: File;
-  providerId?: string; // pode não existir ainda no "create"
-}
+/**
+ * Faz upload da logo do fornecedor no bucket `provider-logos`
+ * e devolve a URL pública.
+ *
+ * - Se não tiver arquivo, devolve a URL já existente (se houver)
+ */
+export const uploadProviderLogo = async (
+  file: File | null,
+  existingUrl?: string | null
+): Promise<string | null> => {
+  // Se não recebeu arquivo novo, mantém logo atual
+  if (!file) return existingUrl ?? null;
 
-export const uploadProviderLogo = async ({
-  file,
-  providerId,
-}: UploadProviderLogoParams): Promise<{ publicUrl: string; path: string }> => {
-  const ext = file.name.split('.').pop() || 'jpg';
-  const fileName = `${Date.now()}.${ext}`;
-  const folder = providerId || 'new';
-  const path = `providers/${folder}/${fileName}`;
+  // Garante extensão bonitinha
+  const ext = file.name.split('.').pop() || 'png';
 
-  const { error } = await supabaseMaster.storage
-    .from('provider-logos') // 👈 garante que você criou esse bucket
-    .upload(path, file, {
+  const fileName = `${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}.${ext}`;
+
+  // Caminho dentro do bucket
+  const filePath = `logos/${fileName}`;
+
+  const { data, error } = await supabaseMaster.storage
+    .from('provider-logos')            // 👈 bucket precisa EXISTIR com esse nome
+    .upload(filePath, file, {
       cacheControl: '3600',
       upsert: true,
     });
 
   if (error) {
-    console.error('[uploadProviderLogo] error', error);
+    console.error('[uploadProviderLogo] erro no upload', error);
     throw error;
   }
 
+  const path = data?.path || filePath;
+
   const {
-    data: { publicUrl },
+    data: publicData,
   } = supabaseMaster.storage.from('provider-logos').getPublicUrl(path);
 
-  return { publicUrl, path };
+  return publicData.publicUrl ?? null;
 };
