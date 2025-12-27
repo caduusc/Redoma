@@ -20,6 +20,8 @@ const AdminProviders: React.FC = () => {
     isActive: true,
   });
 
+  const providersSorted = [...providers].sort((a, b) => a.name.localeCompare(b.name));
+
   const handleOpenModal = (p: Provider | null = null) => {
     if (p) {
       setEditingProvider(p);
@@ -69,21 +71,108 @@ const AdminProviders: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-left">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nome</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Categoria</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cashback %</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Ações</th>
-            </tr>
-          </thead>
+        {/* MOBILE: cards empilhados */}
+        <div className="block md:hidden divide-y divide-slate-100">
+          {providersSorted.map((p) => (
+            <div key={p.id} className="p-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
+                    {p.name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800 text-sm leading-tight">{p.name}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {p.type === 'ecommerce'
+                        ? 'E-commerce'
+                        : p.type === 'service'
+                        ? 'Serviços'
+                        : 'Outros'}
+                    </p>
+                  </div>
+                </div>
 
-          <tbody className="divide-y divide-slate-100">
-            {providers
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((p) => (
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border ${
+                    p.isActive
+                      ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                      : 'bg-slate-50 text-slate-400 border-slate-200'
+                  }`}
+                >
+                  {p.isActive ? <CheckCircle2 size={10} /> : <XCircle size={10} />}
+                  {p.isActive ? 'Ativo' : 'Inativo'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="inline-flex items-center gap-1 text-slate-500 bg-slate-50 px-2 py-1 rounded-lg">
+                  {p.category || 'Sem categoria'}
+                </span>
+                <span className="font-bold text-emerald-600">
+                  {p.cashbackPercent}% cashback
+                </span>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => toggleActive(p.id)}
+                  className="flex-1 inline-flex items-center justify-center gap-1 text-[11px] font-semibold px-3 py-2 rounded-xl border border-slate-200 text-slate-500 bg-slate-50 active:scale-[0.98] transition-all"
+                >
+                  <Power size={14} />
+                  {p.isActive ? 'Desativar' : 'Ativar'}
+                </button>
+                <button
+                  onClick={() => handleOpenModal(p)}
+                  className="flex-1 inline-flex items-center justify-center gap-1 text-[11px] font-semibold px-3 py-2 rounded-xl border border-blue-100 text-blue-600 bg-blue-50 active:scale-[0.98] transition-all"
+                >
+                  <Edit2 size={14} />
+                  Editar
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm('Excluir fornecedor?')) deleteProvider(p.id);
+                  }}
+                  className="w-10 inline-flex items-center justify-center rounded-xl border border-red-100 text-red-500 bg-red-50 active:scale-[0.98] transition-all"
+                  title="Excluir"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {providersSorted.length === 0 && (
+            <div className="p-6 text-center text-xs text-slate-400">
+              Nenhum fornecedor cadastrado ainda.
+            </div>
+          )}
+        </div>
+
+        {/* DESKTOP: tabela tradicional */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Nome
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Categoria
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Cashback %
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Status
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">
+                  Ações
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-slate-100">
+              {providersSorted.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -100,7 +189,9 @@ const AdminProviders: React.FC = () => {
                     </span>
                   </td>
 
-                  <td className="px-6 py-4 font-bold text-emerald-600 text-sm">{p.cashbackPercent}%</td>
+                  <td className="px-6 py-4 font-bold text-emerald-600 text-sm">
+                    {p.cashbackPercent}%
+                  </td>
 
                   <td className="px-6 py-4">
                     <span
@@ -142,8 +233,20 @@ const AdminProviders: React.FC = () => {
                   </td>
                 </tr>
               ))}
-          </tbody>
-        </table>
+
+              {providersSorted.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-6 text-center text-xs text-slate-400"
+                  >
+                    Nenhum fornecedor cadastrado ainda.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Modal */}
@@ -154,25 +257,37 @@ const AdminProviders: React.FC = () => {
               <h3 className="text-xl font-bold text-slate-800">
                 {editingProvider ? 'Editar Fornecedor' : 'Novo Fornecedor'}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
                 <XCircle size={24} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-8 grid grid-cols-2 gap-6">
-             <div className="space-y-1 col-span-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nome do Fornecedor</label>
-                <input 
-                  type="text" required
-                  value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})}
+            <form onSubmit={handleSubmit} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Nome do Fornecedor
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tipo</label>
-                <select 
-                  value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value as any})}
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Tipo
+                </label>
+                <select
+                  value={formData.type}
+                  onChange={(e) =>
+                    setFormData({ ...formData, type: e.target.value as any })
+                  }
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
                 >
                   <option value="ecommerce">E-commerce</option>
@@ -182,55 +297,101 @@ const AdminProviders: React.FC = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Categoria</label>
-                <input 
-                  type="text" required placeholder="Ex: Varejo, Tecnologia..."
-                  value={formData.category} onChange={(e) => setFormData({...formData, category: e.target.value})}
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Categoria
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Varejo, Tecnologia..."
+                  value={formData.category}
+                  onChange={(e) =>
+                    setFormData({ ...formData, category: e.target.value })
+                  }
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
                 />
               </div>
 
-              <div className="space-y-1 col-span-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Breve Descrição</label>
-                <textarea 
-                  rows={2} required
-                  value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})}
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Breve Descrição
+                </label>
+                <textarea
+                  rows={2}
+                  required
+                  value={formData.description}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cashback (%)</label>
-                <input 
-                  type="number" step="0.1" required
-                  value={formData.cashbackPercent} onChange={(e) => setFormData({...formData, cashbackPercent: parseFloat(e.target.value)})}
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Cashback (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  required
+                  value={formData.cashbackPercent}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      cashbackPercent: parseFloat(e.target.value || '0'),
+                    })
+                  }
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Link de Acesso (URL)</label>
-                <input 
-                  type="url" required
-                  value={formData.link} onChange={(e) => setFormData({...formData, link: e.target.value})}
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Link de Acesso (URL)
+                </label>
+                <input
+                  type="url"
+                  required
+                  value={formData.link}
+                  onChange={(e) =>
+                    setFormData({ ...formData, link: e.target.value })
+                  }
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
                 />
               </div>
 
-              <div className="space-y-1 col-span-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Texto de Impacto (Revenue Share)</label>
-                <input 
-                  type="text" required placeholder="Ex: Parte do valor retorna para o seu condomínio..."
-                  value={formData.revenueShareText} onChange={(e) => setFormData({...formData, revenueShareText: e.target.value})}
+              <div className="space-y-1 md:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Texto de Impacto (Revenue Share)
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Parte do valor retorna para o seu condomínio..."
+                  value={formData.revenueShareText}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      revenueShareText: e.target.value,
+                    })
+                  }
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
                 />
               </div>
 
-              <div className="col-span-2 pt-4 flex gap-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 px-6 py-4 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all border border-slate-200">
+              <div className="md:col-span-2 pt-4 flex flex-col md:flex-row gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="flex-1 px-6 py-4 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all border border-slate-200"
+                >
                   Cancelar
                 </button>
-                <button type="submit" className="flex-1 px-6 py-4 rounded-xl font-bold text-xs uppercase tracking-widest bg-redoma-dark text-white hover:bg-slate-800 transition-all shadow-xl shadow-redoma-dark/20">
+                <button
+                  type="submit"
+                  className="flex-1 px-6 py-4 rounded-xl font-bold text-xs uppercase tracking-widest bg-redoma-dark text-white hover:bg-slate-800 transition-all shadow-xl shadow-redoma-dark/20"
+                >
                   {editingProvider ? 'Salvar Alterações' : 'Criar Fornecedor'}
                 </button>
               </div>

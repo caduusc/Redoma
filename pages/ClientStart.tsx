@@ -48,7 +48,7 @@ const ClientStart: React.FC = () => {
 
       if (!data) {
         setError(
-          'O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato no número 11 97189-1760'
+          'O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato no WhatsApp 11 95825-8734'
         );
         return;
       }
