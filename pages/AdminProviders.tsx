@@ -2,16 +2,27 @@ import React, { useState } from 'react';
 import { useProviders } from '../context/ProviderContext';
 import AdminLayout from '../components/AdminLayout';
 import { Provider } from '../types';
-import { Plus, Edit2, Trash2, Power, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Power, CheckCircle2, XCircle, Image as ImageIcon } from 'lucide-react';
+import { uploadProviderLogo } from '../lib/uploadProviderLogo';
+
+type ProviderFormData = {
+  name: string;
+  type: Provider['type'];
+  category: string;
+  description: string;
+  cashbackPercent: number;
+  revenueShareText: string;
+  link: string;
+  isActive: boolean;
+  logoUrl?: string | null;
+};
 
 const AdminProviders: React.FC = () => {
   const { providers, addProvider, updateProvider, deleteProvider, toggleActive } = useProviders();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
 
-  const [formData, setFormData] = useState<
-    Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>
-  >({
+  const [formData, setFormData] = useState<ProviderFormData>({
     name: '',
     type: 'ecommerce',
     category: '',
@@ -20,47 +31,98 @@ const AdminProviders: React.FC = () => {
     revenueShareText: '',
     link: '',
     isActive: true,
+    logoUrl: '',
   });
 
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
   const providersSorted = [...providers].sort((a, b) => a.name.localeCompare(b.name));
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      type: 'ecommerce',
+      category: '',
+      description: '',
+      cashbackPercent: 0,
+      revenueShareText: '',
+      link: '',
+      isActive: true,
+      logoUrl: '',
+    });
+    setLogoFile(null);
+    setLogoPreview(null);
+  };
 
   const handleOpenModal = (p: Provider | null = null) => {
     if (p) {
       setEditingProvider(p);
-      setFormData({ ...p });
+      setFormData({
+        name: p.name,
+        type: p.type,
+        category: p.category,
+        description: p.description,
+        cashbackPercent: p.cashbackPercent,
+        revenueShareText: p.revenueShareText,
+        link: p.link,
+        isActive: p.isActive,
+        logoUrl: p.logoUrl ?? '',
+      });
+      setLogoFile(null);
+      setLogoPreview(p.logoUrl ?? null);
     } else {
       setEditingProvider(null);
-      setFormData({
-        name: '',
-        type: 'ecommerce',
-        category: '',
-        description: '',
-        cashbackPercent: 0,
-        revenueShareText: '',
-        link: '',
-        isActive: true,
-      });
+      resetForm();
     }
     setIsModalOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingProvider) {
-      updateProvider(editingProvider.id, formData);
-    } else {
-      addProvider(formData);
+
+    try {
+      let finalLogoUrl = formData.logoUrl || '';
+
+      if (logoFile) {
+        const { publicUrl } = await uploadProviderLogo({
+          file: logoFile,
+          providerId: editingProvider?.id,
+        });
+        finalLogoUrl = publicUrl;
+      }
+
+      const payload: ProviderFormData = {
+        ...formData,
+        logoUrl: finalLogoUrl,
+      };
+
+      if (editingProvider) {
+        await updateProvider(editingProvider.id, payload as any);
+      } else {
+        await addProvider(payload as any);
+      }
+
+      setIsModalOpen(false);
+      resetForm();
+    } catch (err) {
+      console.error('[AdminProviders handleSubmit] error', err);
+      alert('Erro ao salvar fornecedor. Tente novamente.');
     }
-    setIsModalOpen(false);
   };
 
   return (
     <AdminLayout activeTab="providers">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-            Gestão de Parceiros
-          </h2>
+          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Gestão de Parceiros</h2>
           <p className="text-slate-400 text-sm mt-1">
             Cadastre e gerencie os parceiros que oferecem benefícios à rede.
           </p>
@@ -81,13 +143,19 @@ const AdminProviders: React.FC = () => {
             <div key={p.id} className="p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
-                    {p.name.charAt(0)}
-                  </div>
+                  {p.logoUrl ? (
+                    <img
+                      src={p.logoUrl}
+                      alt={p.name}
+                      className="w-9 h-9 rounded-xl object-cover bg-white border border-slate-100"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
+                      {p.name.charAt(0)}
+                    </div>
+                  )}
                   <div>
-                    <p className="font-bold text-slate-800 text-sm leading-tight">
-                      {p.name}
-                    </p>
+                    <p className="font-bold text-slate-800 text-sm leading-tight">{p.name}</p>
                     <p className="text-[11px] text-slate-400">
                       {p.type === 'ecommerce'
                         ? 'E-commerce'
@@ -182,9 +250,17 @@ const AdminProviders: React.FC = () => {
                 <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
-                        {p.name.charAt(0)}
-                      </div>
+                      {p.logoUrl ? (
+                        <img
+                          src={p.logoUrl}
+                          alt={p.name}
+                          className="w-8 h-8 rounded-lg object-cover bg-white border border-slate-100"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-xs">
+                          {p.name.charAt(0)}
+                        </div>
+                      )}
                       <span className="font-bold text-slate-700">{p.name}</span>
                     </div>
                   </td>
@@ -264,7 +340,10 @@ const AdminProviders: React.FC = () => {
                 {editingProvider ? 'Editar Fornecedor' : 'Novo Fornecedor'}
               </h3>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  resetForm();
+                }}
                 className="text-slate-400 hover:text-slate-600"
               >
                 <XCircle size={24} />
@@ -275,6 +354,36 @@ const AdminProviders: React.FC = () => {
               onSubmit={handleSubmit}
               className="px-6 py-6 md:px-8 md:py-8 grid grid-cols-1 md:grid-cols-2 gap-6"
             >
+              {/* Logo */}
+              <div className="md:col-span-2 flex items-center gap-4">
+                {logoPreview || formData.logoUrl ? (
+                  <img
+                    src={logoPreview || (formData.logoUrl as string)}
+                    alt="Prévia da logo"
+                    className="w-14 h-14 rounded-2xl object-cover bg-slate-100 border border-slate-200"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                    <ImageIcon size={24} />
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Logo do Fornecedor (opcional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoChange}
+                    className="text-[11px]"
+                  />
+                  <span className="text-[10px] text-slate-400">
+                    PNG ou JPG, de preferência quadrado, até ~2MB.
+                  </span>
+                </div>
+              </div>
+
               <div className="space-y-1 md:col-span-2">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Nome do Fornecedor
@@ -366,10 +475,7 @@ const AdminProviders: React.FC = () => {
                   placeholder="Opcional"
                   value={formData.link}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      link: e.target.value || '',
-                    })
+                    setFormData({ ...formData, link: e.target.value })
                   }
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
                 />
@@ -397,7 +503,10 @@ const AdminProviders: React.FC = () => {
               <div className="md:col-span-2 pt-4 flex flex-col md:flex-row gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    resetForm();
+                  }}
                   className="flex-1 px-6 py-4 rounded-xl font-bold text-xs uppercase tracking-widest text-slate-400 hover:bg-slate-50 transition-all border border-slate-200"
                 >
                   Cancelar

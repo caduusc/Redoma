@@ -7,11 +7,9 @@ export interface Conversation {
   claimedBy?: string | null;
   createdAt: string;
 
-  // ✅ "visto"
   last_client_seen_at?: string | null;
   last_agent_seen_at?: string | null;
 
-  // token do cliente (anon)
   clientToken?: string | null;
 }
 
@@ -24,17 +22,13 @@ export interface Message {
   conversationId: string;
   senderType: SenderType;
 
-  // 👉 tipo da mensagem
   messageType: MessageType;
 
-  // 👉 texto (quando messageType = 'text')
   text?: string;
 
-  // 👉 imagem (quando messageType = 'image')
   imageUrl?: string | null;
   imageThumbUrl?: string | null;
 
-  // caminho original no bucket (bom pra deletar futuramente)
   storagePath?: string | null;
 
   createdAt: string;
@@ -64,7 +58,10 @@ export interface Provider {
   cashbackPercent: number;
   revenueShareText: string;
   link: string;
-  logoUrl?: string;
+  
+  // 👇 agora o provider aceita logo
+  logoUrl?: string | null;
+
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
