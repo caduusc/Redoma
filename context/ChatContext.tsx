@@ -128,6 +128,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const boot = async () => {
       getOrCreateClientToken();
 
+      // ============ MODO SUPORTE ============
       if (isAgent) {
         const { data: convs } = await supabaseSupport.from('conversations').select('*');
         if (convs) setConversations(convs as Conversation[]);
@@ -159,6 +160,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      // ============ MODO CLIENTE ============
       if (activeConvId) {
         const { data: conv } = await supabasePublic
           .from('conversations')
@@ -173,6 +175,38 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .eq('conversationId', activeConvId)
           .order('createdAt', { ascending: true });
         if (msgs) setMessages(msgs as Message[]);
+
+        // 🔴 realtime pro cliente: conversa + mensagens
+        convChannel = supabasePublic
+          .channel(`client_conversations_${activeConvId}`)
+          .on(
+            'postgres_changes' as any,
+            {
+              event: '*',
+              schema: 'public',
+              table: 'conversations',
+              filter: `id=eq.${activeConvId}`,
+            },
+            (p: any) => upsertConversation(p.new as Conversation)
+          )
+          .subscribe();
+
+        msgChannel = supabasePublic
+          .channel(`client_messages_${activeConvId}`)
+          .on(
+            'postgres_changes' as any,
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'messages',
+              filter: `conversationId=eq.${activeConvId}`,
+            },
+            (p: any) => upsertMessage(p.new as Message)
+          )
+          .subscribe();
+      } else {
+        setConversations([]);
+        setMessages([]);
       }
     };
 
@@ -241,7 +275,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (senderType !== 'agent') {
       // otimista pro cliente
       upsertMessage(msg);
-      // 💡 e logo depois, refetch pra puxar a mensagem automática do agente
+      // e logo depois, refetch pra puxar a auto-resposta do agente
       await refreshMessages(conversationId);
     }
   };
@@ -290,7 +324,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (senderType !== 'agent') {
       // otimista pro cliente
       upsertMessage(msg);
-      // 💡 refetch pra puxar a auto-resposta também quando o primeiro contato é por imagem
+      // refetch pra puxar auto-resposta também quando o primeiro contato é por imagem
       await refreshMessages(conversationId);
     }
 
@@ -326,7 +360,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const getConversation = (id: string) => conversations.find((c) => c.id === id);
   const getMessages = (conversationId: string) =>
-    messages.filter((m) => m.conversationId === conversationId);
+    messages
+      .filter((m) => m.conversationId === conversationId)
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
 
   return (
     <ChatContext.Provider
