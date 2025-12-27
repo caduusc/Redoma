@@ -9,7 +9,9 @@ const AdminProviders: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
 
-  const [formData, setFormData] = useState<Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>>({
+  const [formData, setFormData] = useState<
+    Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>
+  >({
     name: '',
     type: 'ecommerce',
     category: '',
@@ -56,7 +58,9 @@ const AdminProviders: React.FC = () => {
     <AdminLayout activeTab="providers">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Gestão de Parceiros</h2>
+          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+            Gestão de Parceiros
+          </h2>
           <p className="text-slate-400 text-sm mt-1">
             Cadastre e gerencie os parceiros que oferecem benefícios à rede.
           </p>
@@ -81,7 +85,9 @@ const AdminProviders: React.FC = () => {
                     {p.name.charAt(0)}
                   </div>
                   <div>
-                    <p className="font-bold text-slate-800 text-sm leading-tight">{p.name}</p>
+                    <p className="font-bold text-slate-800 text-sm leading-tight">
+                      {p.name}
+                    </p>
                     <p className="text-[11px] text-slate-400">
                       {p.type === 'ecommerce'
                         ? 'E-commerce'
@@ -252,7 +258,7 @@ const AdminProviders: React.FC = () => {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-white/20 animate-in fade-in zoom-in duration-200">
+          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-white/20 animate-in fade-in slide-in-from-bottom-4 duration-200">
             <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <h3 className="text-xl font-bold text-slate-800">
                 {editingProvider ? 'Editar Fornecedor' : 'Novo Fornecedor'}
@@ -265,7 +271,10 @@ const AdminProviders: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <form
+              onSubmit={handleSubmit}
+              className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6"
+            >
               <div className="space-y-1 md:col-span-2">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                   Nome do Fornecedor
@@ -274,8 +283,10 @@ const AdminProviders: React.FC = () => {
                   type="text"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
                 />
               </div>
 
@@ -288,7 +299,7 @@ const AdminProviders: React.FC = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, type: e.target.value as any })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
                 >
                   <option value="ecommerce">E-commerce</option>
                   <option value="service">Serviços</option>
@@ -308,7 +319,7 @@ const AdminProviders: React.FC = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, category: e.target.value })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
                 />
               </div>
 
@@ -323,7 +334,7 @@ const AdminProviders: React.FC = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, description: e.target.value })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
                 />
               </div>
 
@@ -342,7 +353,7 @@ const AdminProviders: React.FC = () => {
                       cashbackPercent: parseFloat(e.target.value || '0'),
                     })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
                 />
               </div>
 
@@ -352,12 +363,15 @@ const AdminProviders: React.FC = () => {
                 </label>
                 <input
                   type="url"
-                  required
+                  placeholder="Opcional"
                   value={formData.link}
                   onChange={(e) =>
-                    setFormData({ ...formData, link: e.target.value })
+                    setFormData({
+                      ...formData,
+                      link: e.target.value || '',
+                    })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
                 />
               </div>
 
@@ -376,7 +390,7 @@ const AdminProviders: React.FC = () => {
                       revenueShareText: e.target.value,
                     })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
                 />
               </div>
 
