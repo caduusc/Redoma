@@ -89,6 +89,36 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveConvIdState(id);
   }, []);
 
+  // 🔁 helper pra refazer o SELECT de mensagens de uma conversa
+  const refreshMessages = useCallback(
+    async (conversationId: string) => {
+      try {
+        const { data, error } = await supabasePublic
+          .from('messages')
+          .select('*')
+          .eq('conversationId', conversationId)
+          .order('createdAt', { ascending: true });
+
+        if (error) {
+          console.error('[refreshMessages] error', error);
+          return;
+        }
+
+        if (!data) return;
+
+        const fresh = data as Message[];
+
+        setMessages((prev) => {
+          const other = prev.filter((m) => m.conversationId !== conversationId);
+          return [...other, ...fresh];
+        });
+      } catch (err) {
+        console.error('[refreshMessages] fatal', err);
+      }
+    },
+    []
+  );
+
   /* ===================== BOOT ===================== */
 
   useEffect(() => {
@@ -208,7 +238,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { error } = await client.from('messages').insert(msg);
     if (error) throw error;
 
-    if (senderType !== 'agent') upsertMessage(msg);
+    if (senderType !== 'agent') {
+      // otimista pro cliente
+      upsertMessage(msg);
+      // 💡 e logo depois, refetch pra puxar a mensagem automática do agente
+      await refreshMessages(conversationId);
+    }
   };
 
   const sendImageMessage = async (
@@ -224,7 +259,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       type: file.type,
     });
 
-    // 1) upload pro Storage
     const { publicUrl, path } = await uploadChatImage({
       file,
       conversationId,
@@ -233,7 +267,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     console.log('[sendImageMessage REAL] upload ok:', { publicUrl, path });
 
-    // 2) criar mensagem do tipo imagem
     const msg: Message = {
       id: crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2),
       conversationId,
@@ -254,9 +287,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw error;
     }
 
-    // otimista só pro cliente
     if (senderType !== 'agent') {
+      // otimista pro cliente
       upsertMessage(msg);
+      // 💡 refetch pra puxar a auto-resposta também quando o primeiro contato é por imagem
+      await refreshMessages(conversationId);
     }
 
     console.log('[sendImageMessage REAL] mensagem de imagem inserida com sucesso');
