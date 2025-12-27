@@ -8,7 +8,8 @@ import React, {
 } from 'react';
 import { Conversation, Message, User, SenderType } from '../types';
 import { supabasePublic, supabaseSupport } from '../lib/supabase';
-import { uploadChatImage } from '../lib/uploadChatImage';
+// 🧪 MODO TESTE: upload real desativado por enquanto
+// import { uploadChatImage } from '../lib/uploadChatImage';
 
 interface ChatContextType {
   conversations: Conversation[];
@@ -211,6 +212,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (senderType !== 'agent') upsertMessage(msg);
   };
 
+  // 🧪 MODO TESTE: não usa Storage nem Supabase, só injeta uma imagem fake no estado
   const sendImageMessage = async (
     conversationId: string,
     file: File,
@@ -218,32 +220,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     const clientToken = getOrCreateClientToken();
 
-    // 1) upload pro Storage
-    const { publicUrl, path } = await uploadChatImage({
-      file,
-      conversationId,
-      senderType,
+    console.log('[sendImageMessage TEST] file selecionado:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
     });
 
-    // 2) criar mensagem do tipo imagem
+    const fakeUrl = 'https://placehold.co/400x250?text=Imagem+de+Teste';
+
     const msg: Message = {
       id: crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2),
       conversationId,
       senderType,
       messageType: 'image',
       text: '',
-      imageUrl: publicUrl,
-      storagePath: path,
+      imageUrl: fakeUrl,
+      storagePath: null,
       clientToken,
       createdAt: new Date().toISOString(),
     };
 
-    const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
-    const { error } = await client.from('messages').insert(msg);
-    if (error) throw error;
-
-    // otimista só pro cliente
-    if (senderType !== 'agent') upsertMessage(msg);
+    // 🔥 não chama Supabase aqui — só joga no estado local pra ver se o front está ok
+    upsertMessage(msg);
   };
 
   const claimConversation = async (conversationId: string) => {
