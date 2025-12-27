@@ -80,7 +80,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const upsertMessage = useCallback((msg: Message) => {
-    setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === msg.id)) return prev;
+      return [...prev, msg];
+    });
   }, []);
 
   const setActiveConversationId = useCallback((id: string | null) => {
@@ -89,10 +92,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveConvIdState(id);
   }, []);
 
-  // 🔁 helper pra refazer o SELECT de mensagens de uma conversa
+  // 🔁 helper: refetch das mensagens de uma conversa
   const refreshMessages = useCallback(
     async (conversationId: string) => {
       try {
+        console.log('[refreshMessages] fetching from Supabase for conv', conversationId);
+
         const { data, error } = await supabasePublic
           .from('messages')
           .select('*')
@@ -130,13 +135,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // ============ MODO SUPORTE ============
       if (isAgent) {
-        const { data: convs } = await supabaseSupport.from('conversations').select('*');
+        console.log('[ChatProvider boot] modo SUPORTE');
+
+        const { data: convs, error: convErr } = await supabaseSupport
+          .from('conversations')
+          .select('*');
+
+        if (convErr) console.error('[support fetch conversations]', convErr);
         if (convs) setConversations(convs as Conversation[]);
 
-        const { data: msgs } = await supabaseSupport
+        const { data: msgs, error: msgErr } = await supabaseSupport
           .from('messages')
           .select('*')
           .order('createdAt', { ascending: true });
+
+        if (msgErr) console.error('[support fetch messages]', msgErr);
         if (msgs) setMessages(msgs as Message[]);
 
         convChannel = supabaseSupport
@@ -161,22 +174,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // ============ MODO CLIENTE ============
+      console.log('[ChatProvider boot] modo CLIENTE, activeConvId =', activeConvId);
+
       if (activeConvId) {
-        const { data: conv } = await supabasePublic
+        const { data: conv, error: convErr } = await supabasePublic
           .from('conversations')
           .select('*')
           .eq('id', activeConvId)
           .maybeSingle();
+
+        if (convErr) console.error('[client fetch active conversation]', convErr);
         if (conv) setConversations([conv as Conversation]);
 
-        const { data: msgs } = await supabasePublic
+        const { data: msgs, error: msgErr } = await supabasePublic
           .from('messages')
           .select('*')
           .eq('conversationId', activeConvId)
           .order('createdAt', { ascending: true });
+
+        if (msgErr) console.error('[client fetch active messages]', msgErr);
         if (msgs) setMessages(msgs as Message[]);
 
-        // realtime pro cliente: conversa + mensagens
+        // realtime para o cliente
         convChannel = supabasePublic
           .channel(`client_conversations_${activeConvId}`)
           .on(
@@ -235,7 +254,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const createConversation = async (communityId: string) => {
     const clientToken = getOrCreateClientToken();
-    const id = crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2);
+    const id =
+      crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     const conv = {
       id,
@@ -259,7 +279,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     const clientToken = getOrCreateClientToken();
     const msg: Message = {
-      id: crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2),
+      id:
+        crypto?.randomUUID?.() ??
+        Math.random().toString(36).slice(2) + Date.now().toString(36),
       conversationId,
       senderType,
       messageType: 'text',
@@ -268,10 +290,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString(),
     };
 
+    console.log('[addMessage] called', { conversationId, text, senderType, msg });
+
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
 
-    // 🔹 sempre plota localmente (optimistic)
-    if (senderType !== 'agent') {
+    // ✅ sempre plota localmente pro cliente (optimistic)
+    if (senderType === 'client') {
       upsertMessage(msg);
     }
 
@@ -279,12 +303,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { error } = await client.from('messages').insert(msg);
       if (error) {
         console.error('[addMessage] insert error', error);
-        // se quiser, aqui dá pra remover a msg otimista em caso de erro
         return;
       }
 
-      // cliente: refetch pra trazer auto-resposta + alinhar ordem
-      if (senderType !== 'agent') {
+      // depois de inserir mensagem do cliente, refaz o SELECT pra buscar:
+      // - a própria mensagem confirmada
+      // - a mensagem automática do agente (trigger)
+      if (senderType === 'client') {
         await refreshMessages(conversationId);
       }
     } catch (err) {
@@ -314,7 +339,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('[sendImageMessage REAL] upload ok:', { publicUrl, path });
 
     const msg: Message = {
-      id: crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2),
+      id:
+        crypto?.randomUUID?.() ??
+        Math.random().toString(36).slice(2) + Date.now().toString(36),
       conversationId,
       senderType,
       messageType: 'image',
@@ -327,7 +354,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
 
-    if (senderType !== 'agent') {
+    if (senderType === 'client') {
       upsertMessage(msg);
     }
 
@@ -339,7 +366,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      if (senderType !== 'agent') {
+      if (senderType === 'client') {
         await refreshMessages(conversationId);
       }
 
@@ -377,6 +404,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const getConversation = (id: string) => conversations.find((c) => c.id === id);
+
   const getMessages = (conversationId: string) =>
     messages
       .filter((m) => m.conversationId === conversationId)
