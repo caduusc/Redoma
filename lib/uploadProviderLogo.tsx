@@ -1,42 +1,26 @@
 // src/lib/uploadProviderLogo.ts
-import { supabaseMaster } from './supabase';
+import { supabasePublic } from './supabase';
 
 interface UploadProviderLogoParams {
   file: File;
   providerId?: string | null;
 }
 
-interface UploadProviderLogoResult {
-  path: string;
-  publicUrl: string;
-}
+export async function uploadProviderLogo({
+  file,
+  providerId,
+}: UploadProviderLogoParams): Promise<{ publicUrl: string }> {
+  const bucket = 'provider-logos'; // TROCAR se seu bucket tiver outro nome
 
-export async function uploadProviderLogo(
-  params: UploadProviderLogoParams
-): Promise<UploadProviderLogoResult> {
-  const { file, providerId } = params;
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${providerId || 'new'}-${Date.now()}.${fileExt}`;
+  const filePath = `logos/${fileName}`;
 
-  // id base pra path
-  const baseId =
-    providerId ||
-    (typeof crypto !== 'undefined' &&
-      'randomUUID' in crypto &&
-      crypto.randomUUID())
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2, 11);
-
-  const ext = file.name.split('.').pop() || 'png';
-  const fileName = `${Date.now()}.${ext}`;
-  const filePath = `${baseId}/${fileName}`;
-
-  // IMPORTANTE: bucket deve existir no Supabase com esse nome
-  const bucketName = 'provider-logos';
-
-  const { error: uploadError } = await supabaseMaster.storage
-    .from(bucketName)
+  const { error: uploadError } = await supabasePublic.storage
+    .from(bucket)
     .upload(filePath, file, {
-      cacheControl: '3600',
       upsert: true,
+      cacheControl: '3600',
     });
 
   if (uploadError) {
@@ -44,17 +28,9 @@ export async function uploadProviderLogo(
     throw uploadError;
   }
 
-  const { data: publicData } = supabaseMaster.storage
-    .from(bucketName)
-    .getPublicUrl(filePath);
+  const {
+    data: { publicUrl },
+  } = supabasePublic.storage.from(bucket).getPublicUrl(filePath);
 
-  if (!publicData?.publicUrl) {
-    console.error('[uploadProviderLogo] não retornou publicUrl', publicData);
-    throw new Error('Falha ao obter URL pública da logo.');
-  }
-
-  return {
-    path: filePath,
-    publicUrl: publicData.publicUrl,
-  };
+  return { publicUrl };
 }
