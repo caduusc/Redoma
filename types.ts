@@ -58,14 +58,12 @@ export interface Provider {
   cashbackPercent: number;
   revenueShareText: string;
   link: string;
-
-  // url pública da logo (vem de logo_url no banco)
   logoUrl?: string | null;
-
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
 
 export interface Community {
   id: string;

@@ -13,7 +13,56 @@ interface ProviderContextType {
 
 const ProviderContext = createContext<ProviderContextType | undefined>(undefined);
 
-// Seed inicial (front usa logoUrl; DB usa logo_url)
+/**
+ * Mapeia linha do banco (logo_url) -> modelo do app (logoUrl)
+ */
+const mapFromDb = (row: any): Provider => ({
+  id: row.id,
+  name: row.name,
+  type: row.type,
+  category: row.category,
+  description: row.description,
+  cashbackPercent: row.cashbackPercent,
+  revenueShareText: row.revenueShareText,
+  link: row.link ?? '',
+  logoUrl: row.logo_url ?? null,
+  isActive: row.isActive,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+});
+
+/**
+ * Mapeia Provider completo -> payload de insert (logoUrl -> logo_url)
+ */
+const mapToDbInsert = (p: Provider) => ({
+  id: p.id,
+  name: p.name,
+  type: p.type,
+  category: p.category,
+  description: p.description,
+  cashbackPercent: p.cashbackPercent,
+  revenueShareText: p.revenueShareText,
+  link: p.link,
+  logo_url: p.logoUrl ?? null,
+  isActive: p.isActive,
+  createdAt: p.createdAt,
+  updatedAt: p.updatedAt,
+});
+
+/**
+ * Mapeia Partial<Provider> -> payload de update (logoUrl -> logo_url)
+ */
+const mapToDbUpdate = (p: Partial<Provider>) => {
+  const db: any = { ...p };
+
+  if ('logoUrl' in db) {
+    db.logo_url = db.logoUrl ?? null;
+    delete db.logoUrl;
+  }
+
+  return db;
+};
+
 const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
     name: 'Mercado Livre',
@@ -53,24 +102,6 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
 export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [providers, setProviders] = useState<Provider[]>([]);
 
-  // Converte linhas do banco (logo_url) para o tipo Provider (logoUrl)
-  const normalizeRows = (rows: any[]): Provider[] => {
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      type: row.type,
-      category: row.category,
-      description: row.description,
-      cashbackPercent: row.cashbackPercent,
-      revenueShareText: row.revenueShareText,
-      link: row.link ?? '',
-      logoUrl: row.logo_url ?? null,
-      isActive: row.isActive,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    }));
-  };
-
   useEffect(() => {
     let subscription: any;
 
@@ -83,43 +114,40 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       if (data && data.length > 0) {
-        setProviders(normalizeRows(data));
+        // 🔁 converte logo_url -> logoUrl
+        setProviders(data.map(mapFromDb));
         return;
       }
 
       // Seed se tabela estiver vazia
       const nowIso = new Date().toISOString();
-      const seedPayload = SEED_PROVIDERS.map((p) => ({
-        id:
-          typeof crypto !== 'undefined' &&
-          'randomUUID' in crypto &&
-          crypto.randomUUID()
+      const seedPayload = SEED_PROVIDERS.map((p) => {
+        const id =
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto && crypto.randomUUID()
             ? crypto.randomUUID()
-            : Math.random().toString(36).slice(2, 11),
-        name: p.name,
-        type: p.type,
-        category: p.category,
-        description: p.description,
-        cashbackPercent: p.cashbackPercent,
-        revenueShareText: p.revenueShareText,
-        link: p.link,
-        logo_url: p.logoUrl ?? null,
-        isActive: p.isActive,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      }));
+            : Math.random().toString(36).slice(2, 11);
+
+        const provider: Provider = {
+          ...p,
+          id,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+
+        return mapToDbInsert(provider);
+      });
 
       const { data: seeded, error: seedErr } = await supabaseMaster
         .from('providers')
         .insert(seedPayload)
-        .select('*');
+        .select();
 
       if (seedErr) {
         console.error('[ProviderContext seed providers]', seedErr);
         return;
       }
 
-      if (seeded) setProviders(normalizeRows(seeded));
+      if (seeded) setProviders((seeded as any[]).map(mapFromDb));
     };
 
     fetchProviders();
@@ -132,7 +160,7 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         { event: '*', schema: 'public', table: 'providers' },
         async () => {
           const { data, error } = await supabaseMaster.from('providers').select('*');
-          if (!error && data) setProviders(normalizeRows(data));
+          if (!error && data) setProviders(data.map(mapFromDb));
         }
       )
       .subscribe();
@@ -144,11 +172,9 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const addProvider = async (p: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>) => {
     const nowIso = new Date().toISOString();
-    const { logoUrl, ...rest } = p;
 
-    const payload: any = {
-      ...rest,
-      logo_url: logoUrl ?? null,
+    const provider: Provider = {
+      ...p,
       id:
         typeof crypto !== 'undefined' &&
         'randomUUID' in crypto &&
@@ -159,25 +185,21 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       updatedAt: nowIso,
     };
 
-    const { error } = await supabaseMaster.from('providers').insert([payload]);
+    const dbPayload = mapToDbInsert(provider);
+
+    const { error } = await supabaseMaster.from('providers').insert([dbPayload]);
     if (error) console.error('[ProviderContext addProvider]', error);
   };
 
   const updateProvider = async (id: string, p: Partial<Provider>) => {
-    const { logoUrl, ...rest } = p;
-
-    const payload: any = {
-      ...rest,
+    const dbPayload = mapToDbUpdate({
+      ...p,
       updatedAt: new Date().toISOString(),
-    };
-
-    if (logoUrl !== undefined) {
-      payload.logo_url = logoUrl;
-    }
+    });
 
     const { error } = await supabaseMaster
       .from('providers')
-      .update(payload)
+      .update(dbPayload)
       .eq('id', id);
 
     if (error) console.error('[ProviderContext updateProvider]', error);
