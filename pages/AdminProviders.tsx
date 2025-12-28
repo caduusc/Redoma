@@ -22,7 +22,7 @@ type ProviderFormData = {
   revenueShareText: string;
   link: string;
   isActive: boolean;
-  // 👇 segue o nome da coluna do banco
+  // mesmo nome da coluna no banco
   logo_url?: string | null;
 };
 
@@ -100,24 +100,22 @@ const AdminProviders: React.FC = () => {
     try {
       let finalLogoUrl: string | null = formData.logo_url ?? null;
 
-      // Upload da logo é opcional
+      // Upload da logo (opcional)
       if (logoFile) {
-        try {
-          const { publicUrl } = await uploadProviderLogo({
-            file: logoFile,
-            providerId: editingProvider?.id,
-          });
-          finalLogoUrl = publicUrl;
-        } catch (logoErr) {
-          console.error('[AdminProviders] erro ao fazer upload da logo', logoErr);
-          // se quiser, pode dar um alert aqui
-        }
+        const { publicUrl } = await uploadProviderLogo({
+          file: logoFile,
+          providerId: editingProvider?.id,
+        });
+        finalLogoUrl = publicUrl;
+        console.log('[AdminProviders] logo enviada com sucesso:', publicUrl);
       }
 
       const payload: ProviderFormData = {
         ...formData,
         logo_url: finalLogoUrl,
       };
+
+      console.log('[AdminProviders] payload para salvar:', payload);
 
       if (editingProvider) {
         await updateProvider(editingProvider.id, payload as any);
@@ -128,8 +126,8 @@ const AdminProviders: React.FC = () => {
       setIsModalOpen(false);
       resetForm();
     } catch (err) {
-      console.error('[AdminProviders handleSubmit] error ao salvar provider', err);
-      alert('Erro ao salvar fornecedor. Tente novamente.');
+      console.error('[AdminProviders handleSubmit] erro ao salvar provider', err);
+      alert('Erro ao salvar fornecedor (logo ou dados). Veja o console para detalhes.');
     }
   };
 
