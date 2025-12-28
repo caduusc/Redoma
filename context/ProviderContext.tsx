@@ -13,56 +13,7 @@ interface ProviderContextType {
 
 const ProviderContext = createContext<ProviderContextType | undefined>(undefined);
 
-/**
- * Mapeia linha do banco (logo_url) -> modelo do app (logoUrl)
- */
-const mapFromDb = (row: any): Provider => ({
-  id: row.id,
-  name: row.name,
-  type: row.type,
-  category: row.category,
-  description: row.description,
-  cashbackPercent: row.cashbackPercent,
-  revenueShareText: row.revenueShareText,
-  link: row.link ?? '',
-  logoUrl: row.logo_url ?? null,
-  isActive: row.isActive,
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-});
-
-/**
- * Mapeia Provider completo -> payload de insert (logoUrl -> logo_url)
- */
-const mapToDbInsert = (p: Provider) => ({
-  id: p.id,
-  name: p.name,
-  type: p.type,
-  category: p.category,
-  description: p.description,
-  cashbackPercent: p.cashbackPercent,
-  revenueShareText: p.revenueShareText,
-  link: p.link,
-  logo_url: p.logoUrl ?? null,
-  isActive: p.isActive,
-  createdAt: p.createdAt,
-  updatedAt: p.updatedAt,
-});
-
-/**
- * Mapeia Partial<Provider> -> payload de update (logoUrl -> logo_url)
- */
-const mapToDbUpdate = (p: Partial<Provider>) => {
-  const db: any = { ...p };
-
-  if ('logoUrl' in db) {
-    db.logo_url = db.logoUrl ?? null;
-    delete db.logoUrl;
-  }
-
-  return db;
-};
-
+// Seed inicial (já com logo_url opcional)
 const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
   {
     name: 'Mercado Livre',
@@ -72,7 +23,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Parte do valor retorna para o fundo da sua comunidade.',
     link: 'https://www.mercadolivre.com.br',
-    logoUrl: null,
+    logo_url: null,
     isActive: true,
   },
   {
@@ -83,7 +34,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Ajude sua comunidade comprando na Shopee.',
     link: 'https://shopee.com.br',
-    logoUrl: null,
+    logo_url: null,
     isActive: true,
   },
   {
@@ -94,7 +45,7 @@ const SEED_PROVIDERS: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>[] = [
     cashbackPercent: 5.0,
     revenueShareText: 'Serviço premium com benefício direto para a comunidade.',
     link: '#',
-    logoUrl: null,
+    logo_url: null,
     isActive: true,
   },
 ];
@@ -114,32 +65,26 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       if (data && data.length > 0) {
-        // 🔁 converte logo_url -> logoUrl
-        setProviders(data.map(mapFromDb));
+        setProviders(data as Provider[]);
         return;
       }
 
       // Seed se tabela estiver vazia
-      const nowIso = new Date().toISOString();
-      const seedPayload = SEED_PROVIDERS.map((p) => {
-        const id =
-          typeof crypto !== 'undefined' && 'randomUUID' in crypto && crypto.randomUUID()
-            ? crypto.randomUUID()
-            : Math.random().toString(36).slice(2, 11);
-
-        const provider: Provider = {
-          ...p,
-          id,
-          createdAt: nowIso,
-          updatedAt: nowIso,
-        };
-
-        return mapToDbInsert(provider);
-      });
-
       const { data: seeded, error: seedErr } = await supabaseMaster
         .from('providers')
-        .insert(seedPayload)
+        .insert(
+          SEED_PROVIDERS.map((p) => ({
+            ...p,
+            id:
+              typeof crypto !== 'undefined' &&
+              'randomUUID' in crypto &&
+              crypto.randomUUID()
+                ? crypto.randomUUID()
+                : Math.random().toString(36).slice(2, 11),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }))
+        )
         .select();
 
       if (seedErr) {
@@ -147,7 +92,7 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
 
-      if (seeded) setProviders((seeded as any[]).map(mapFromDb));
+      if (seeded) setProviders(seeded as Provider[]);
     };
 
     fetchProviders();
@@ -160,7 +105,7 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         { event: '*', schema: 'public', table: 'providers' },
         async () => {
           const { data, error } = await supabaseMaster.from('providers').select('*');
-          if (!error && data) setProviders(data.map(mapFromDb));
+          if (!error && data) setProviders(data as Provider[]);
         }
       )
       .subscribe();
@@ -171,9 +116,7 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const addProvider = async (p: Omit<Provider, 'id' | 'createdAt' | 'updatedAt'>) => {
-    const nowIso = new Date().toISOString();
-
-    const provider: Provider = {
+    const newP: Provider = {
       ...p,
       id:
         typeof crypto !== 'undefined' &&
@@ -181,33 +124,32 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         crypto.randomUUID()
           ? crypto.randomUUID()
           : Math.random().toString(36).slice(2, 11),
-      createdAt: nowIso,
-      updatedAt: nowIso,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    const dbPayload = mapToDbInsert(provider);
-
-    const { error } = await supabaseMaster.from('providers').insert([dbPayload]);
-    if (error) console.error('[ProviderContext addProvider]', error);
+    const { error } = await supabaseMaster.from('providers').insert([newP]);
+    if (error) {
+      console.error('[ProviderContext addProvider]', error);
+    }
   };
 
   const updateProvider = async (id: string, p: Partial<Provider>) => {
-    const dbPayload = mapToDbUpdate({
-      ...p,
-      updatedAt: new Date().toISOString(),
-    });
-
     const { error } = await supabaseMaster
       .from('providers')
-      .update(dbPayload)
+      .update({ ...p, updatedAt: new Date().toISOString() })
       .eq('id', id);
 
-    if (error) console.error('[ProviderContext updateProvider]', error);
+    if (error) {
+      console.error('[ProviderContext updateProvider]', error);
+    }
   };
 
   const deleteProvider = async (id: string) => {
     const { error } = await supabaseMaster.from('providers').delete().eq('id', id);
-    if (error) console.error('[ProviderContext deleteProvider]', error);
+    if (error) {
+      console.error('[ProviderContext deleteProvider]', error);
+    }
   };
 
   const toggleActive = async (id: string) => {

@@ -11,9 +11,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ provider }) => {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all p-6 flex flex-col h-full group">
-      
       <div className="flex justify-between items-start mb-4">
-        
         {/* LOGO OU LETRA */}
         <div className="w-12 h-12 rounded-xl flex items-center justify-center border border-slate-100 bg-slate-50 overflow-hidden group-hover:bg-redoma-light transition-colors">
           {provider.logo_url ? (

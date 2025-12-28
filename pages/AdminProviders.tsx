@@ -2,7 +2,15 @@ import React, { useState } from 'react';
 import { useProviders } from '../context/ProviderContext';
 import AdminLayout from '../components/AdminLayout';
 import { Provider } from '../types';
-import { Plus, Edit2, Trash2, Power, CheckCircle2, XCircle, Image as ImageIcon } from 'lucide-react';
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Power,
+  CheckCircle2,
+  XCircle,
+  Image as ImageIcon,
+} from 'lucide-react';
 import { uploadProviderLogo } from '../lib/uploadProviderLogo';
 
 type ProviderFormData = {
@@ -14,7 +22,8 @@ type ProviderFormData = {
   revenueShareText: string;
   link: string;
   isActive: boolean;
-  logoUrl?: string | null;
+  // 👇 segue o nome da coluna do banco
+  logo_url?: string | null;
 };
 
 const AdminProviders: React.FC = () => {
@@ -31,7 +40,7 @@ const AdminProviders: React.FC = () => {
     revenueShareText: '',
     link: '',
     isActive: true,
-    logoUrl: null,
+    logo_url: null,
   });
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -49,7 +58,7 @@ const AdminProviders: React.FC = () => {
       revenueShareText: '',
       link: '',
       isActive: true,
-      logoUrl: null,
+      logo_url: null,
     });
     setLogoFile(null);
     setLogoPreview(null);
@@ -67,10 +76,10 @@ const AdminProviders: React.FC = () => {
         revenueShareText: p.revenueShareText,
         link: p.link,
         isActive: p.isActive,
-        logoUrl: p.logoUrl ?? null,
+        logo_url: p.logo_url ?? null,
       });
       setLogoFile(null);
-      setLogoPreview(p.logoUrl ?? null);
+      setLogoPreview(p.logo_url ?? null);
     } else {
       setEditingProvider(null);
       resetForm();
@@ -89,9 +98,9 @@ const AdminProviders: React.FC = () => {
     e.preventDefault();
 
     try {
-      let finalLogoUrl: string | null = formData.logoUrl ?? null;
+      let finalLogoUrl: string | null = formData.logo_url ?? null;
 
-      // Upload da logo é opcional. Se der erro, apenas loga
+      // Upload da logo é opcional
       if (logoFile) {
         try {
           const { publicUrl } = await uploadProviderLogo({
@@ -101,14 +110,13 @@ const AdminProviders: React.FC = () => {
           finalLogoUrl = publicUrl;
         } catch (logoErr) {
           console.error('[AdminProviders] erro ao fazer upload da logo', logoErr);
-          // Opcional: você pode avisar o usuário sem travar o save:
-          // alert('Não foi possível enviar a logo, mas os dados do fornecedor foram salvos.');
+          // se quiser, pode dar um alert aqui
         }
       }
 
       const payload: ProviderFormData = {
         ...formData,
-        logoUrl: finalLogoUrl,
+        logo_url: finalLogoUrl,
       };
 
       if (editingProvider) {
@@ -150,9 +158,9 @@ const AdminProviders: React.FC = () => {
             <div key={p.id} className="p-4 flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  {p.logoUrl ? (
+                  {p.logo_url ? (
                     <img
-                      src={p.logoUrl}
+                      src={p.logo_url}
                       alt={p.name}
                       className="w-9 h-9 rounded-xl object-cover bg-white border border-slate-100"
                     />
@@ -257,9 +265,9 @@ const AdminProviders: React.FC = () => {
                 <tr key={p.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      {p.logoUrl ? (
+                      {p.logo_url ? (
                         <img
-                          src={p.logoUrl}
+                          src={p.logo_url}
                           alt={p.name}
                           className="w-8 h-8 rounded-lg object-cover bg-white border border-slate-100"
                         />
@@ -363,9 +371,9 @@ const AdminProviders: React.FC = () => {
             >
               {/* Logo */}
               <div className="md:col-span-2 flex items-center gap-4">
-                {logoPreview || formData.logoUrl ? (
+                {logoPreview || formData.logo_url ? (
                   <img
-                    src={logoPreview || (formData.logoUrl as string)}
+                    src={logoPreview || (formData.logo_url as string)}
                     alt="Prévia da logo"
                     className="w-14 h-14 rounded-2xl object-cover bg-slate-100 border border-slate-200"
                   />
