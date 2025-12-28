@@ -1,5 +1,5 @@
 // src/lib/uploadProviderLogo.ts
-import { supabasePublic } from './supabase';
+import { supabaseMaster } from './supabase';
 
 interface UploadProviderLogoParams {
   file: File;
@@ -10,17 +10,19 @@ export async function uploadProviderLogo({
   file,
   providerId,
 }: UploadProviderLogoParams): Promise<{ publicUrl: string }> {
-  const bucket = 'provider-logos'; // TROCAR se seu bucket tiver outro nome
+  // 🔹 CONFERE ESSE NOME: precisa ser exatamente o nome do bucket no Supabase
+  const bucket = 'provider-logos';
 
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${providerId || 'new'}-${Date.now()}.${fileExt}`;
+  const ext = file.name.split('.').pop() || 'png';
+  const fileName = `${providerId || 'new'}-${Date.now()}.${ext}`;
   const filePath = `logos/${fileName}`;
 
-  const { error: uploadError } = await supabasePublic.storage
+  // 👉 usando supabaseMaster: service role, ignora RLS
+  const { error: uploadError } = await supabaseMaster.storage
     .from(bucket)
     .upload(filePath, file, {
-      upsert: true,
       cacheControl: '3600',
+      upsert: true,
     });
 
   if (uploadError) {
@@ -30,7 +32,9 @@ export async function uploadProviderLogo({
 
   const {
     data: { publicUrl },
-  } = supabasePublic.storage.from(bucket).getPublicUrl(filePath);
+  } = supabaseMaster.storage.from(bucket).getPublicUrl(filePath);
+
+  console.log('[uploadProviderLogo] publicUrl gerada:', publicUrl);
 
   return { publicUrl };
 }
