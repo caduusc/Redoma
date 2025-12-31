@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { supabasePublic } from '../lib/supabase';
@@ -34,6 +34,17 @@ const ClientStart: React.FC = () => {
 
   const { createConversation } = useChat();
   const navigate = useNavigate();
+
+  // 🔁 Se já tiver sessão & conversa ativa, pula direto pro chat
+  useEffect(() => {
+    const memberSession = localStorage.getItem('redoma_member_session');
+    const activeConv = localStorage.getItem('redoma_active_conv');
+    const community = localStorage.getItem('redoma_client_cid');
+
+    if (memberSession && activeConv && community) {
+      navigate('/client/chat');
+    }
+  }, [navigate]);
 
   const handleCommunityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCommunityId(e.target.value);
