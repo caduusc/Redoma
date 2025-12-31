@@ -14,21 +14,18 @@ const getOrCreateClientToken = () => {
   return token;
 };
 
-// 🔐 normaliza CPF (só dígitos) e gera hash SHA-256
-const normalizeCpf = (cpf: string) => cpf.replace(/\D/g, '');
-
-const hashCpf = async (cpf: string): Promise<string> => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(cpf);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
-};
+// normaliza nome: tira acento, múltiplos espaços, deixa minúsculo
+const normalizeFullName = (name: string) =>
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .trim()
+    .replace(/\s+/g, ' ') // colapsa espaços
+    .toLowerCase();
 
 const ClientStart: React.FC = () => {
   const [communityId, setCommunityId] = useState('');
-  const [cpf, setCpf] = useState('');
+  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,8 +48,8 @@ const ClientStart: React.FC = () => {
     if (error) setError(null);
   };
 
-  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCpf(e.target.value);
+  const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFullName(e.target.value);
     if (error) setError(null);
   };
 
@@ -60,9 +57,9 @@ const ClientStart: React.FC = () => {
     e.preventDefault();
 
     const normalizedId = communityId.trim().toLowerCase();
-    const normalizedCpf = normalizeCpf(cpf);
+    const rawName = fullName.trim();
 
-    if (!normalizedId || !normalizedCpf) return;
+    if (!normalizedId || !rawName) return;
 
     setLoading(true);
     setError(null);
@@ -86,21 +83,22 @@ const ClientStart: React.FC = () => {
         return;
       }
 
-      // 2) Cria / recupera membro na tabela members (community_id + cpf_hash)
-      const cpfHash = await hashCpf(normalizedCpf);
+      // 2) Cria / recupera membro na tabela members (community_id + full_name_normalized)
+      const normalizedFullName = normalizeFullName(rawName);
 
       const { data: memberData, error: memberError } = await supabasePublic
         .from('members')
         .upsert(
           {
             community_id: normalizedId,
-            cpf_hash: cpfHash,
+            full_name: rawName,
+            full_name_normalized: normalizedFullName,
           },
           {
-            onConflict: 'community_id,cpf_hash',
+            onConflict: 'community_id,full_name_normalized',
           }
         )
-        .select('member_id, community_id')
+        .select('member_id, community_id, full_name')
         .single();
 
       if (memberError || !memberData) {
@@ -113,6 +111,7 @@ const ClientStart: React.FC = () => {
       const session = {
         memberId: memberData.member_id,
         communityId: memberData.community_id,
+        fullName: memberData.full_name,
       };
       localStorage.setItem('redoma_member_session', JSON.stringify(session));
 
@@ -184,17 +183,17 @@ const ClientStart: React.FC = () => {
 
           <div className="space-y-2">
             <label
-              htmlFor="cpf"
+              htmlFor="fullName"
               className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1"
             >
-              CPF
+              Nome completo
             </label>
             <input
-              id="cpf"
+              id="fullName"
               type="text"
-              placeholder="Ex: 000.000.000-00"
-              value={cpf}
-              onChange={handleCpfChange}
+              placeholder="Ex: João da Silva Souza"
+              value={fullName}
+              onChange={handleFullNameChange}
               disabled={loading}
               className={`w-full px-5 py-4 rounded-2xl border ${
                 error ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-slate-50/50'
@@ -216,7 +215,7 @@ const ClientStart: React.FC = () => {
 
           <button
             type="submit"
-            disabled={loading || !communityId.trim() || !cpf.trim()}
+            disabled={loading || !communityId.trim() || !fullName.trim()}
             className="w-full bg-redoma-dark text-white font-bold py-4 rounded-2xl hover:bg-redoma-navy transition-all shadow-lg active:scale-[0.98] uppercase tracking-widest text-xs disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (

@@ -260,7 +260,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       crypto?.randomUUID?.() ??
       (Math.random().toString(36).slice(2) + Date.now().toString(36));
 
-    // 🔹 Recupera memberId salvo na sessão (CPF + comunidade)
+    // 🔹 Recupera memberId salvo na sessão (nome + comunidade)
     let memberId: string | null = null;
     const rawSession = localStorage.getItem('redoma_member_session');
     if (rawSession) {

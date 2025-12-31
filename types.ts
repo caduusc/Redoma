@@ -10,6 +10,9 @@ export interface Conversation {
   // amarra a conversa a uma pessoa da comunidade (members.member_id)
   memberId?: string | null;
 
+  // nome do membro (se vier de join / view)
+  memberName?: string | null;
+
   // "visto"
   last_client_seen_at?: string | null;
   last_agent_seen_at?: string | null;
@@ -82,4 +85,11 @@ export interface Community {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// opcional, se quiser usar Members tipado depois
+export interface Member {
+  memberId: string;
+  communityId: string;
+  fullName: string;
 }
