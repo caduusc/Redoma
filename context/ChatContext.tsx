@@ -49,7 +49,7 @@ const getOrCreateClientToken = () => {
 
   const token =
     crypto?.randomUUID?.() ??
-    Math.random().toString(36).slice(2) + Date.now().toString(36);
+    (Math.random().toString(36).slice(2) + Date.now().toString(36));
 
   localStorage.setItem('redoma_client_token', token);
   return token;
@@ -134,6 +134,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getOrCreateClientToken();
 
       // ============ MODO SUPORTE ============
+
       if (isAgent) {
         console.log('[ChatProvider boot] modo SUPORTE');
 
@@ -174,6 +175,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // ============ MODO CLIENTE ============
+
       console.log('[ChatProvider boot] modo CLIENTE, activeConvId =', activeConvId);
 
       if (activeConvId) {
@@ -255,7 +257,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const createConversation = async (communityId: string) => {
     const clientToken = getOrCreateClientToken();
     const id =
-      crypto?.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36);
+      crypto?.randomUUID?.() ??
+      (Math.random().toString(36).slice(2) + Date.now().toString(36));
+
+    // 🔹 Recupera memberId salvo na sessão (CPF + comunidade)
+    let memberId: string | null = null;
+    const rawSession = localStorage.getItem('redoma_member_session');
+    if (rawSession) {
+      try {
+        const parsed = JSON.parse(rawSession) as { memberId?: string; communityId?: string };
+        if (parsed?.memberId) {
+          memberId = parsed.memberId;
+        }
+      } catch {
+        // se der erro de parse, ignora e segue sem memberId
+      }
+    }
 
     const conv = {
       id,
@@ -264,6 +281,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       claimedBy: null,
       createdAt: new Date().toISOString(),
       clientToken,
+      // novo campo: amarra conversa ao membro
+      memberId: memberId ?? null,
     };
 
     await supabasePublic.from('conversations').insert(conv);
@@ -281,7 +300,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const msg: Message = {
       id:
         crypto?.randomUUID?.() ??
-        Math.random().toString(36).slice(2) + Date.now().toString(36),
+        (Math.random().toString(36).slice(2) + Date.now().toString(36)),
       conversationId,
       senderType,
       messageType: 'text',
@@ -306,9 +325,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // depois de inserir mensagem do cliente, refaz o SELECT pra buscar:
-      // - a própria mensagem confirmada
-      // - a mensagem automática do agente (trigger)
       if (senderType === 'client') {
         await refreshMessages(conversationId);
       }
@@ -341,7 +357,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const msg: Message = {
       id:
         crypto?.randomUUID?.() ??
-        Math.random().toString(36).slice(2) + Date.now().toString(36),
+        (Math.random().toString(36).slice(2) + Date.now().toString(36)),
       conversationId,
       senderType,
       messageType: 'image',

@@ -14,23 +14,44 @@ const getOrCreateClientToken = () => {
   return token;
 };
 
+// 🔐 normaliza CPF (só dígitos) e gera hash SHA-256
+const normalizeCpf = (cpf: string) => cpf.replace(/\D/g, '');
+
+const hashCpf = async (cpf: string): Promise<string> => {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(cpf);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  return hashHex;
+};
+
 const ClientStart: React.FC = () => {
   const [communityId, setCommunityId] = useState('');
+  const [cpf, setCpf] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { createConversation } = useChat();
   const navigate = useNavigate();
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCommunityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCommunityId(e.target.value);
+    if (error) setError(null);
+  };
+
+  const handleCpfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCpf(e.target.value);
     if (error) setError(null);
   };
 
   const handleStart = async (e: React.FormEvent) => {
     e.preventDefault();
+
     const normalizedId = communityId.trim().toLowerCase();
-    if (!normalizedId) return;
+    const normalizedCpf = normalizeCpf(cpf);
+
+    if (!normalizedId || !normalizedCpf) return;
 
     setLoading(true);
     setError(null);
@@ -38,6 +59,7 @@ const ClientStart: React.FC = () => {
     try {
       getOrCreateClientToken();
 
+      // 1) Valida se a comunidade existe
       const { data, error: sbError } = await supabasePublic
         .from('communities')
         .select('id')
@@ -53,9 +75,40 @@ const ClientStart: React.FC = () => {
         return;
       }
 
+      // 2) Cria / recupera membro na tabela members (community_id + cpf_hash)
+      const cpfHash = await hashCpf(normalizedCpf);
+
+      const { data: memberData, error: memberError } = await supabasePublic
+        .from('members')
+        .upsert(
+          {
+            community_id: normalizedId,
+            cpf_hash: cpfHash,
+          },
+          {
+            onConflict: 'community_id,cpf_hash',
+          }
+        )
+        .select('member_id, community_id')
+        .single();
+
+      if (memberError || !memberData) {
+        console.error('[ClientStart] upsert member error', memberError);
+        setError('Não foi possível identificar você. Tente novamente.');
+        return;
+      }
+
+      // 3) Salva sessão do membro (usada depois por createConversation)
+      const session = {
+        memberId: memberData.member_id,
+        communityId: memberData.community_id,
+      };
+      localStorage.setItem('redoma_member_session', JSON.stringify(session));
+
+      // 4) Mantém compatibilidade com o resto do app
       localStorage.setItem('redoma_client_cid', normalizedId);
 
-      // createConversation já seta o activeConvId
+      // 5) Cria conversa já amarrada ao memberId (via ChatContext.createConversation)
       await createConversation(normalizedId);
 
       navigate('/client/chat');
@@ -107,7 +160,7 @@ const ClientStart: React.FC = () => {
               type="text"
               placeholder="Ex: unidos-somos-fortes"
               value={communityId}
-              onChange={handleInputChange}
+              onChange={handleCommunityChange}
               disabled={loading}
               className={`w-full px-5 py-4 rounded-2xl border ${
                 error ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-slate-50/50'
@@ -116,19 +169,43 @@ const ClientStart: React.FC = () => {
               } focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
               required
             />
-            {error && (
-              <div className="flex items-start gap-2 mt-2 px-1 animate-in fade-in slide-in-from-top-1">
-                <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
-                <p className="text-[11px] font-semibold text-red-600 leading-tight">
-                  {error}
-                </p>
-              </div>
-            )}
           </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor="cpf"
+              className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1"
+            >
+              CPF
+            </label>
+            <input
+              id="cpf"
+              type="text"
+              placeholder="Ex: 000.000.000-00"
+              value={cpf}
+              onChange={handleCpfChange}
+              disabled={loading}
+              className={`w-full px-5 py-4 rounded-2xl border ${
+                error ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-slate-50/50'
+              } focus:ring-2 ${
+                error ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'
+              } focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 mt-2 px-1 animate-in fade-in slide-in-from-top-1">
+              <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] font-semibold text-red-600 leading-tight">
+                {error}
+              </p>
+            </div>
+          )}
 
           <button
             type="submit"
-            disabled={loading || !communityId.trim()}
+            disabled={loading || !communityId.trim() || !cpf.trim()}
             className="w-full bg-redoma-dark text-white font-bold py-4 rounded-2xl hover:bg-redoma-navy transition-all shadow-lg active:scale-[0.98] uppercase tracking-widest text-xs disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {loading ? (

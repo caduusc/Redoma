@@ -7,6 +7,9 @@ export interface Conversation {
   claimedBy?: string | null;
   createdAt: string;
 
+  // amarra a conversa a uma pessoa da comunidade (members.member_id)
+  memberId?: string | null;
+
   // "visto"
   last_client_seen_at?: string | null;
   last_agent_seen_at?: string | null;
