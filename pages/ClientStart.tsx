@@ -14,7 +14,7 @@ const getOrCreateClientToken = () => {
   return token;
 };
 
-// normaliza nome: tira acento, múltiplos espaços, deixa minúsculo
+// normaliza nome: tira acentos, múltiplos espaços, deixa minúsculo
 const normalizeFullName = (name: string) =>
   name
     .normalize('NFD')
@@ -86,20 +86,20 @@ const ClientStart: React.FC = () => {
       // 2) Cria / recupera membro na tabela members (community_id + full_name_normalized)
       const normalizedFullName = normalizeFullName(rawName);
 
-const { data: memberData, error: memberError } = await supabasePublic
-  .from('members')
-  .upsert(
-    {
-      community_id: normalizedId,
-      full_name: fullName.trim(),
-    },
-    {
-      onConflict: 'community_id,full_name',
-    }
-  )
-  .select('member_id, community_id, full_name')
-  .single();
-
+      const { data: memberData, error: memberError } = await supabasePublic
+        .from('members')
+        .upsert(
+          {
+            community_id: normalizedId,
+            full_name: rawName,
+            full_name_normalized: normalizedFullName,
+          },
+          {
+            onConflict: 'community_id,full_name_normalized',
+          }
+        )
+        .select('member_id, community_id, full_name')
+        .single();
 
       if (memberError || !memberData) {
         console.error('[ClientStart] upsert member error', memberError);
