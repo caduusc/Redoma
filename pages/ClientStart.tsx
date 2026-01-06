@@ -44,7 +44,7 @@ const ClientStart: React.FC = () => {
   const { createConversation, setActiveConversationId } = useChat();
 
   // garante token do cliente (para outras partes do app)
-  const _clientToken = useMemo(() => getOrCreateClientToken(), []);
+  useMemo(() => getOrCreateClientToken(), []);
 
   // dados de identidade vindos do localStorage (se existirem)
   const [fullName, setFullName] = useState<string>(
@@ -121,9 +121,7 @@ const ClientStart: React.FC = () => {
     setStep('COMMUNITY');
   };
 
-  /* ========= STEP 2: BUSCAR COMUNIDADES / CONVERSAS =========
-     Busca por phone_normalized -> members.member_id -> conversations.memberId
-  */
+  /* ========= STEP 2: BUSCAR COMUNIDADES / CONVERSAS ========= */
 
   useEffect(() => {
     const fetchCommunitiesAndConversations = async () => {
@@ -210,7 +208,7 @@ const ClientStart: React.FC = () => {
           return within24h && isOpen;
         });
 
-        // 4) AGRUPA: 1 conversa ativa por comunidade (a mais recente)
+        // AGRUPA: 1 conversa ativa por comunidade (a mais recente)
         const byCommunity = new Map<string, ConversationRow>();
         for (const c of active) {
           if (!byCommunity.has(c.communityId)) {
@@ -282,7 +280,7 @@ const ClientStart: React.FC = () => {
         return;
       }
 
-      // 🔁 0) Se já existir conversa ATIVA (24h) dessa comunidade, reutiliza
+      // Se já existir conversa ATIVA (24h) dessa comunidade, reutiliza
       const existingActive = activeConversations.find(
         (c) => c.communityId === normalizedId
       );
@@ -519,11 +517,17 @@ const ClientStart: React.FC = () => {
                       Comunidade:{' '}
                       <span className="font-semibold">{conv.communityId}</span>
                     </span>
-                    <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-redoma-steel font-bold">
+
+                    <span className="flex items-center gap-2">
                       {hasUnread && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-extrabold tracking-[0.18em]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                          NOVA RESPOSTA
+                        </span>
                       )}
-                      <span>Continuar</span>
+                      <span className="text-[10px] uppercase tracking-widest text-redoma-steel font-bold">
+                        Continuar
+                      </span>
                     </span>
                   </button>
                 );
