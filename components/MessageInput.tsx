@@ -55,8 +55,8 @@ const MessageInput: React.FC<MessageInputProps> = ({
         onChange={(e) => setText(e.target.value)}
         placeholder={disabled ? 'Conversa encerrada' : 'O que você precisa?'}
         disabled={disabled}
-        // 🔹 font-size 16px evita zoom automático no iOS ao focar
-        className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-redoma-steel focus:border-transparent disabled:bg-slate-50 disabled:cursor-not-allowed transition-all text-[16px] leading-tight"
+        // Ajustes: bg-white explícito, texto preto (slate-900), placeholder visível (slate-400)
+        className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-redoma-light focus:border-transparent disabled:bg-slate-50 disabled:cursor-not-allowed transition-all text-[16px] leading-tight"
       />
 
       <button

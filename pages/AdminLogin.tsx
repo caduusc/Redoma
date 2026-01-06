@@ -21,7 +21,7 @@ const AdminLogin: React.FC = () => {
       });
 
       if (error) {
-        alert('E-mail ou senha inválidos');
+        alert('E-mail ou senha inválidos.');
         return;
       }
 

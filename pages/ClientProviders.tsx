@@ -33,7 +33,38 @@ const ClientProviders: React.FC = () => {
   return (
     <div className="min-h-screen bg-redoma-light">
       <header className="bg-redoma-dark text-white py-12 px-6 relative overflow-hidden">
-        <div className="absolute top-[-50%] right-[-10%] w-[300px] h-[300px] bg-redoma-glow/10 rounded-full blur-[100px]" />
+        {/* Enhanced Visual Effect Background */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <style>
+            {`
+              @keyframes banner-orbit {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+              }
+              @keyframes banner-pulse {
+                0%, 100% { opacity: 0.3; transform: scale(0.9); }
+                50% { opacity: 0.7; transform: scale(1.1); }
+              }
+              .banner-animate-orbit { animation: banner-orbit 60s linear infinite; transform-origin: center; }
+              .banner-animate-pulse { animation: banner-pulse 5s ease-in-out infinite; }
+            `}
+          </style>
+          
+          <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-redoma-glow/10 rounded-full blur-[120px]" />
+          
+          <svg className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-30" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice">
+            <g className="banner-animate-orbit">
+              <ellipse cx="50" cy="50" rx="60" ry="20" stroke="white" strokeWidth="0.1" fill="none" transform="rotate(-15 50 50)" />
+              <ellipse cx="50" cy="50" rx="50" ry="35" stroke="white" strokeWidth="0.05" fill="none" transform="rotate(20 50 50)" />
+              
+              <circle cx="10" cy="20" r="1" fill="#F4F4DC" className="banner-animate-pulse" />
+              <circle cx="90" cy="80" r="0.8" fill="#F4F4DC" className="banner-animate-pulse" style={{ animationDelay: '2s' }} />
+              <circle cx="30" cy="85" r="1.2" fill="#F4F4DC" className="banner-animate-pulse" style={{ animationDelay: '3.5s' }} />
+              <circle cx="70" cy="15" r="0.5" fill="#F4F4DC" />
+              <circle cx="85" cy="40" r="1.5" fill="#F4F4DC" className="banner-animate-pulse" style={{ animationDelay: '1s' }} />
+            </g>
+          </svg>
+        </div>
         
         <div className="max-w-6xl mx-auto relative z-10">
           <button 
@@ -48,8 +79,6 @@ const ClientProviders: React.FC = () => {
           <p className="text-redoma-glow/80 max-w-2xl text-lg font-medium leading-relaxed">
             Utilize os parceiros credenciados Redoma e gere receita automática para a sua comunidade.
           </p>
-          
-          
         </div>
       </header>
 
