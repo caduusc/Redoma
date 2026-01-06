@@ -23,7 +23,10 @@ const normalizeFullName = (name: string) =>
     .replace(/\s+/g, ' ') // colapsa espaços
     .toLowerCase();
 
-type Step = 'NAME' | 'COMMUNITY';
+// normaliza telefone: só dígitos (DDD + número)
+const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+
+type Step = 'IDENTITY' | 'COMMUNITY';
 
 type ConversationRow = {
   id: string;
@@ -39,15 +42,28 @@ const ClientStart: React.FC = () => {
   // garante token do cliente
   const clientToken = useMemo(() => getOrCreateClientToken(), []);
 
-  const [step, setStep] = useState<Step>('NAME');
+  // dados de identidade vindos do localStorage (se existirem)
+  const [fullName, setFullName] = useState<string>(
+    () => localStorage.getItem('redoma_full_name') || ''
+  );
+  const [phone, setPhone] = useState<string>(
+    () => localStorage.getItem('redoma_phone') || ''
+  );
 
-  // STEP 1 – Nome
-  const [fullName, setFullName] = useState('');
+  // se já tiver nome + telefone, começa direto na tela de comunidades
+  const [step, setStep] = useState<Step>(() => {
+    const storedName = localStorage.getItem('redoma_full_name');
+    const storedPhone = localStorage.getItem('redoma_phone');
+    return storedName && storedPhone ? 'COMMUNITY' : 'IDENTITY';
+  });
+
+  // erros do step de identidade
   const [fullNameError, setFullNameError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   const firstName = useMemo(
     () => fullName.trim().split(' ')[0] || 'amigo',
-    [fullName],
+    [fullName]
   );
 
   // STEP 2 – Comunidades / conversas
@@ -59,23 +75,44 @@ const ClientStart: React.FC = () => {
   const [communitiesUsed, setCommunitiesUsed] = useState<string[]>([]);
   const [activeConversations, setActiveConversations] = useState<ConversationRow[]>([]);
 
-  /* ========= STEP 1: NOME ========= */
+  /* ========= STEP 1: IDENTIDADE (nome + celular) ========= */
 
   const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFullName(e.target.value);
     if (fullNameError) setFullNameError(null);
   };
 
-  const handleSubmitName = (e: React.FormEvent) => {
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // deixa o usuário digitar livre, mas você pode aplicar máscara depois se quiser
+    setPhone(e.target.value);
+    if (phoneError) setPhoneError(null);
+  };
+
+  const handleSubmitIdentity = (e: React.FormEvent) => {
     e.preventDefault();
 
     const rawName = fullName.trim();
+    const phoneNorm = normalizePhone(phone);
+
+    let hasError = false;
+
     if (!rawName || rawName.length < 3) {
       setFullNameError('Por favor, preencha seu nome completo.');
-      return;
+      hasError = true;
     }
 
+    // Brasil: geralmente 10 ou 11 dígitos (DDD + número)
+    if (!phoneNorm || phoneNorm.length < 10 || phoneNorm.length > 11) {
+      setPhoneError('Informe um celular com DDD válido (apenas números).');
+      hasError = true;
+    }
+
+    if (hasError) return;
+
+    // persiste identidade no localStorage
     localStorage.setItem('redoma_full_name', rawName);
+    localStorage.setItem('redoma_phone', phoneNorm);
+
     setStep('COMMUNITY');
   };
 
@@ -105,7 +142,7 @@ const ClientStart: React.FC = () => {
 
         // comunidades já usadas (únicas)
         const uniqueCommunities = Array.from(
-          new Set(convs.map((c) => c.communityId).filter(Boolean)),
+          new Set(convs.map((c) => c.communityId).filter(Boolean))
         );
         setCommunitiesUsed(uniqueCommunities);
 
@@ -138,9 +175,10 @@ const ClientStart: React.FC = () => {
     try {
       const normalizedId = communityId.trim().toLowerCase();
       const rawName = fullName.trim();
+      const phoneNorm = normalizePhone(phone);
 
-      if (!normalizedId || !rawName) {
-        setCommunityError('Informe o ID da comunidade e seu nome.');
+      if (!normalizedId || !rawName || !phoneNorm) {
+        setCommunityError('Informe o ID da comunidade, seu nome e celular.');
         return;
       }
 
@@ -155,12 +193,12 @@ const ClientStart: React.FC = () => {
 
       if (!data) {
         setCommunityError(
-          'O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato no WhatsApp 11 95825-8734',
+          'O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato no WhatsApp 11 95825-8734'
         );
         return;
       }
 
-      // 2) Cria / recupera membro na tabela members (community_id + full_name_normalized)
+      // 2) Cria / recupera membro na tabela members (community_id + phone_normalized)
       const normalizedFullName = normalizeFullName(rawName);
 
       const { data: memberData, error: memberError } = await supabasePublic
@@ -170,10 +208,12 @@ const ClientStart: React.FC = () => {
             community_id: normalizedId,
             full_name: rawName,
             full_name_normalized: normalizedFullName,
+            phone: phoneNorm,
+            phone_normalized: phoneNorm,
           },
           {
-            onConflict: 'community_id,full_name_normalized',
-          },
+            onConflict: 'community_id,phone_normalized',
+          }
         )
         .select('member_id, community_id, full_name')
         .single();
@@ -226,8 +266,8 @@ const ClientStart: React.FC = () => {
 
   /* ======================= RENDER ======================= */
 
-  const renderNameStep = () => (
-    <form onSubmit={handleSubmitName} className="p-10 space-y-6 pt-6">
+  const renderIdentityStep = () => (
+    <form onSubmit={handleSubmitIdentity} className="p-10 space-y-6 pt-6">
       <div className="space-y-2">
         <label
           htmlFor="fullName"
@@ -248,20 +288,50 @@ const ClientStart: React.FC = () => {
           } focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
           required
         />
+        {fullNameError && (
+          <div className="flex items-start gap-2 mt-1 px-1 animate-in fade-in slide-in-from-top-1">
+            <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
+            <p className="text-[11px] font-semibold text-red-600 leading-tight">
+              {fullNameError}
+            </p>
+          </div>
+        )}
       </div>
 
-      {fullNameError && (
-        <div className="flex items-start gap-2 mt-2 px-1 animate-in fade-in slide-in-from-top-1">
-          <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
-          <p className="text-[11px] font-semibold text-red-600 leading-tight">
-            {fullNameError}
-          </p>
-        </div>
-      )}
+      <div className="space-y-2">
+        <label
+          htmlFor="phone"
+          className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1"
+        >
+          Celular com DDD
+        </label>
+        <input
+          id="phone"
+          type="tel"
+          inputMode="tel"
+          placeholder="Ex: 11987654321"
+          value={phone}
+          onChange={handlePhoneChange}
+          className={`w-full px-5 py-4 rounded-2xl border ${
+            phoneError ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-slate-50/50'
+          } focus:ring-2 ${
+            phoneError ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'
+          } focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
+          required
+        />
+        {phoneError && (
+          <div className="flex items-start gap-2 mt-1 px-1 animate-in fade-in slide-in-from-top-1">
+            <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
+            <p className="text-[11px] font-semibold text-red-600 leading-tight">
+              {phoneError}
+            </p>
+          </div>
+        )}
+      </div>
 
       <button
         type="submit"
-        disabled={!fullName.trim()}
+        disabled={!fullName.trim() || !normalizePhone(phone)}
         className="w-full bg-redoma-dark text-white font-bold py-4 rounded-2xl hover:bg-redoma-navy transition-all shadow-lg active:scale-[0.98] uppercase tracking-widest text-xs disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         <span>Continuar</span>
@@ -412,10 +482,10 @@ const ClientStart: React.FC = () => {
       <div className="px-10 pb-6 pt-0 flex justify-between items-center border-t border-slate-100">
         <button
           type="button"
-          onClick={() => setStep('NAME')}
+          onClick={() => setStep('IDENTITY')}
           className="text-[10px] text-slate-400 hover:text-slate-600 uppercase tracking-widest"
         >
-          Trocar nome
+          Trocar dados
         </button>
         <p className="text-[10px] text-slate-400">
           Conectando você à rede de suporte Redoma.
@@ -454,7 +524,7 @@ const ClientStart: React.FC = () => {
           </button>
         </div>
 
-        {step === 'NAME' ? renderNameStep() : renderCommunityStep()}
+        {step === 'IDENTITY' ? renderIdentityStep() : renderCommunityStep()}
       </div>
 
       {/* footer de navegação */}
