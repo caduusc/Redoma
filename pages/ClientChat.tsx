@@ -167,7 +167,7 @@ const ClientChat: React.FC = () => {
   const conversation = getConversation(convId);
   const messages = getMessages(convId);
 
-  // 🔔 existe mensagem do agente mais nova que o last_client_seen_at?
+  // existe mensagem do agente mais nova que o last_client_seen_at?
   const lastClientSeenTs = conversation?.last_client_seen_at
     ? new Date(conversation.last_client_seen_at).getTime()
     : 0;
@@ -242,7 +242,7 @@ const ClientChat: React.FC = () => {
         </div>
       }
     >
-      {/* 📱 layout igual ao AgentChat: área scrollável + footer fixo */}
+      {/* layout igual ao AgentChat: área scrollável + footer fixo */}
       <div className="flex flex-col h-full min-h-0">
         {/* Banner topo + badge de nova resposta */}
         <div className="bg-indigo-50 border-b border-indigo-100 px-4 py-2 text-[10px] text-indigo-600 font-bold text-center uppercase tracking-[0.15em] flex items-center justify-center gap-3">
@@ -265,7 +265,7 @@ const ClientChat: React.FC = () => {
           />
         </div>
 
-        {/* Footer fixo com input (respeita teclado) */}
+        {/* Footer fixo com input*/}
         <div className="shrink-0 border-t border-slate-100 bg-white">
           <MessageInput
             onSend={handleSend}
