@@ -445,7 +445,7 @@ const ClientStart: React.FC = () => {
           name="fullName"
           autoComplete="name"
           type="text"
-          placeholder="Ex: Cadu, Julia, Dona Maria"
+          placeholder="Ex: Eduardo, Ju, Dona Maria"
           value={fullName}
           onChange={handleFullNameChange}
           className={`w-full px-5 py-4 rounded-2xl border ${
