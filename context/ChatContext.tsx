@@ -246,7 +246,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: 'open' as const,
       claimedBy: null,
       createdAt: new Date().toISOString(),
-      clientToken,
+      // 👇 garante preenchimento das duas colunas
+      client_token: clientToken,
+      clientToken: clientToken,
       memberId: memberId ?? null,
     };
 
