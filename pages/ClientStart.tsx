@@ -264,6 +264,47 @@ const ClientStart: React.FC = () => {
     fetchCommunitiesAndConversations();
   }, [step, phone]);
 
+  /* ========= REALTIME: NOVAS MENSAGENS DO SUPORTE ========= */
+
+  useEffect(() => {
+    if (step !== 'COMMUNITY') return;
+    if (activeConversations.length === 0) return;
+
+    const activeIds = activeConversations.map((c) => c.id);
+
+    const channel = supabasePublic
+      .channel(
+        `client_start_unread_${normalizePhone(
+          phone || localStorage.getItem('redoma_phone') || ''
+        )}`
+      )
+      .on(
+        'postgres_changes' as any,
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: 'senderType=eq.agent',
+        },
+        (payload: any) => {
+          const convId = payload.new?.conversationId;
+          if (!convId) return;
+          if (!activeIds.includes(convId)) return;
+
+          // chegou mensagem nova do agente pra uma conversa ativa -> badge on
+          setUnreadByConvId((prev) => ({
+            ...prev,
+            [convId]: true,
+          }));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [step, activeConversations, phone]);
+
   /* ========= HELPERS PARA CRIAR / REUTILIZAR CONVERSA ========= */
 
   const startConversationForCommunity = async (communityId: string) => {
