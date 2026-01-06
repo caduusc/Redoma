@@ -100,8 +100,8 @@ const ClientStart: React.FC = () => {
 
     let hasError = false;
 
-    if (!rawName || rawName.length < 3) {
-      setFullNameError('Por favor, preencha seu nome completo.');
+    if (!rawName || rawName.length < 2) {
+      setFullNameError('Como podemos te chamar?');
       hasError = true;
     }
 
@@ -438,14 +438,14 @@ const ClientStart: React.FC = () => {
           htmlFor="fullName"
           className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1"
         >
-          Nome completo
+          Como podemos te chamar?
         </label>
         <input
           id="fullName"
           name="fullName"
           autoComplete="name"
           type="text"
-          placeholder="Ex: João da Silva Souza"
+          placeholder="Ex: Cadu, Julia, Dona Maria"
           value={fullName}
           onChange={handleFullNameChange}
           className={`w-full px-5 py-4 rounded-2xl border ${
