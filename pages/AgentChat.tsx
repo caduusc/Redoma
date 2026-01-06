@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import ChatLayout from '../components/ChatLayout';
@@ -21,6 +21,10 @@ const AgentChat: React.FC = () => {
     currentUser,
   } = useChat();
 
+  // Nome do membro (cliente) associado à conversa
+  const [memberName, setMemberName] = useState<string | null>(null);
+
+  // Guarda de sessão do agente
   useEffect(() => {
     const guard = async () => {
       const { data } = await supabaseSupport.auth.getSession();
@@ -31,6 +35,7 @@ const AgentChat: React.FC = () => {
     guard();
   }, [currentUser, navigate]);
 
+  // Atualiza last_agent_seen_at periodicamente
   useEffect(() => {
     if (!conversationId) return;
 
@@ -52,6 +57,37 @@ const AgentChat: React.FC = () => {
 
   const conversation = getConversation(conversationId);
   const messages = getMessages(conversationId);
+
+  // Busca o nome do membro ligado à conversa (se existir memberId)
+  useEffect(() => {
+    const fetchMemberName = async () => {
+      try {
+        if (!conversation?.memberId) {
+          setMemberName(null);
+          return;
+        }
+
+        const { data, error } = await supabaseSupport
+          .from('members')
+          .select('full_name')
+          .eq('member_id', conversation.memberId)
+          .maybeSingle();
+
+        if (error) {
+          console.error('[AgentChat] erro ao buscar nome do membro', error);
+          setMemberName(null);
+          return;
+        }
+
+        setMemberName(data?.full_name ?? null);
+      } catch (err) {
+        console.error('[AgentChat] fatal ao buscar membro', err);
+        setMemberName(null);
+      }
+    };
+
+    fetchMemberName();
+  }, [conversation?.memberId]);
 
   if (!conversation) return null;
 
@@ -79,9 +115,17 @@ const AgentChat: React.FC = () => {
   const canType = conversation.status === 'claimed';
   const isOpen = conversation.status === 'open';
 
+  // Título = nome do cliente; fallback = comunidade
+  const title = memberName || conversation.communityId || 'Atendimento';
+  // Subtítulo = comunidade
+  const subtitle = conversation.communityId
+    ? `Comunidade: ${conversation.communityId}`
+    : 'Painel Administrativo';
+
   return (
     <ChatLayout
-      title={`${conversation.communityId}`}
+      title={title}
+      subtitle={subtitle}
       showBack
       onBack={() => navigate('/agent/inbox')}
       isAgent
@@ -108,11 +152,15 @@ const AgentChat: React.FC = () => {
         </div>
       }
     >
-      {/* ✅ Wrapper garante que existe "área de mensagens" + "footer input" */}
+      {/* Wrapper garante que existe "área de mensagens" + "footer input" */}
       <div className="flex flex-col h-full min-h-0 relative">
         {/* área scrollável */}
         <div className="flex-1 min-h-0">
-          <MessageList messages={messages} currentType="agent" conversation={conversation} />
+          <MessageList
+            messages={messages}
+            currentType="agent"
+            conversation={conversation}
+          />
         </div>
 
         {/* footer sempre visível */}
@@ -130,9 +178,12 @@ const AgentChat: React.FC = () => {
               <div className="w-16 h-16 bg-redoma-dark/5 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Hand size={32} className="text-redoma-dark" />
               </div>
-              <h3 className="font-extrabold text-redoma-dark text-lg mb-3">Novo Chamado</h3>
+              <h3 className="font-extrabold text-redoma-dark text-lg mb-3">
+                Novo Chamado
+              </h3>
               <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-                Esta comunidade aguarda um atendente. Assuma agora para iniciar o diálogo.
+                Esta comunidade aguarda um atendente. Assuma agora para iniciar o
+                diálogo.
               </p>
               <button
                 onClick={handleClaim}
