@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
@@ -229,13 +230,14 @@ const ClientChat: React.FC = () => {
       onBack={() => navigate('/client/start')}
       actions={
         <div className="flex items-center gap-2">
+          {/* Removido 'hidden sm:flex' para garantir visibilidade no Mobile */}
           <button
             onClick={() => navigate('/client/providers')}
-            className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold bg-white/10 text-white px-3 py-1.5 rounded-full hover:bg-white/20 transition-colors border border-white/10 uppercase tracking-widest"
+            className="flex items-center gap-1.5 text-[10px] font-bold bg-white/10 text-white px-3 py-1.5 rounded-full hover:bg-white/20 transition-colors border border-white/10 uppercase tracking-widest"
             title="Ver Fornecedores"
           >
             <LayoutGrid size={14} />
-            <span>Benefícios</span>
+            <span className="hidden xs:inline">Benefícios</span>
           </button>
         </div>
       }
