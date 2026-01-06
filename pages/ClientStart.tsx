@@ -402,18 +402,17 @@ const ClientStart: React.FC = () => {
 
   const renderCommunityStep = () => (
     <div className="p-10 space-y-6 pt-6">
-      <div className="mb-2">
+      {/* 1. Saudação */}
+      <div>
         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
           Bem-vindo de volta
         </p>
         <h2 className="text-xl font-semibold text-slate-900 mt-1">
           Olá, <span className="text-redoma-steel">{firstName}</span>!
         </h2>
-        <p className="text-sm text-slate-500">
-          Qual comunidade deseja contribuir hoje?
-        </p>
       </div>
 
+      {/* erros gerais dessa etapa */}
       {communityError && (
         <div className="flex items-start gap-2 mt-1 px-1 animate-in fade-in slide-in-from-top-1">
           <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
@@ -423,8 +422,8 @@ const ClientStart: React.FC = () => {
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-6 mt-2">
-        {/* Conversas ativas (últimas 24h) */}
+      <div className="space-y-6">
+        {/* 2. Conversas ativas (sempre logo após a saudação) */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <MessageCircle size={16} className="text-redoma-steel" />
@@ -464,77 +463,74 @@ const ClientStart: React.FC = () => {
           )}
         </div>
 
-        {/* Comunidades usadas + nova comunidade */}
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest">
-              Comunidades em que você já contribuiu
-            </h3>
-            <p className="text-[11px] text-slate-400 mt-1">
-              Clique para iniciar uma nova conversa nessa comunidade.
-            </p>
-          </div>
+        {/* 3. Pergunta principal + 4. Comunidades em que já contribuiu */}
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500">
+            Qual comunidade deseja contribuir hoje?
+          </p>
 
           {loadingCommunities ? (
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <Loader2 className="animate-spin" size={14} />
               Carregando comunidades...
             </div>
-          ) : communitiesUsed.length === 0 ? (
-            <p className="text-[11px] text-slate-400">
-              Ainda não encontramos contribuições anteriores. Comece informando o ID de uma comunidade.
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {communitiesUsed.map((cid) => (
-                <button
-                  key={cid}
-                  type="button"
-                  onClick={() => handleSelectExistingCommunity(cid)}
-                  className="px-3 py-1.5 rounded-full border border-slate-200 text-[11px] text-slate-700 hover:border-redoma-steel hover:text-redoma-steel transition"
-                >
-                  {cid}
-                </button>
-              ))}
-            </div>
-          )}
+          ) : communitiesUsed.length > 0 ? (
+            <>
+              <p className="text-[11px] text-slate-500">
+                Clique em uma das comunidades abaixo para iniciar um novo atendimento.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {communitiesUsed.map((cid) => (
+                  <button
+                    key={cid}
+                    type="button"
+                    onClick={() => handleSelectExistingCommunity(cid)}
+                    className="px-3 py-1.5 rounded-full border border-slate-200 text-[11px] text-slate-700 hover:border-redoma-steel hover:text-redoma-steel transition"
+                  >
+                    {cid}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
 
-          <div className="pt-3 border-t border-slate-100 space-y-3">
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-              Outra comunidade
-            </p>
-            <form className="space-y-2" onSubmit={handleSubmitNewCommunity}>
-              <input
-                type="text"
-                placeholder="Ex: unidos-somos-fortes"
-                value={communityInput}
-                onChange={(e) => {
-                  setCommunityInput(e.target.value);
-                  if (communityError) setCommunityError(null);
-                }}
-                disabled={submittingConversation}
-                className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50/50 focus:ring-2 focus:ring-redoma-steel focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300 text-sm"
-              />
-              <button
-                type="submit"
-                disabled={submittingConversation || !communityInput.trim()}
-                className="w-full bg-redoma-dark text-white font-bold py-4 rounded-2xl hover:bg-redoma-navy transition-all shadow-lg active:scale-[0.98] uppercase tracking-widest text-xs disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {submittingConversation ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>Iniciando...</span>
-                  </>
-                ) : (
-                  <span>Iniciar novo atendimento</span>
-                )}
-              </button>
-            </form>
-          </div>
+        {/* 5. Outra comunidade (campo digitável) */}
+        <div className="pt-3 border-t border-slate-100 space-y-3">
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+            Outra comunidade
+          </p>
+          <form className="space-y-2" onSubmit={handleSubmitNewCommunity}>
+            <input
+              type="text"
+              placeholder="Ex: unidos-somos-fortes"
+              value={communityInput}
+              onChange={(e) => {
+                setCommunityInput(e.target.value);
+                if (communityError) setCommunityError(null);
+              }}
+              disabled={submittingConversation}
+              className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50/50 focus:ring-2 focus:ring-redoma-steel focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={submittingConversation || !communityInput.trim()}
+              className="w-full bg-redoma-dark text-white font-bold py-4 rounded-2xl hover:bg-redoma-navy transition-all shadow-lg active:scale-[0.98] uppercase tracking-widest text-xs disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {submittingConversation ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  <span>Iniciando...</span>
+                </>
+              ) : (
+                <span>Iniciar novo atendimento</span>
+              )}
+            </button>
+          </form>
         </div>
       </div>
 
-      <div className="px-10 pb-6 pt-0 flex justify-between items-center border-t border-slate-100">
+      <div className="px-10 pb-6 pt-0 flex justify-between items-center border-t border-slate-100 mt-4">
         <button
           type="button"
           onClick={() => setStep('IDENTITY')}
