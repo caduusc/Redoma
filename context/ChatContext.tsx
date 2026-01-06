@@ -272,12 +272,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       messageType: 'text' as const,
       text,
       clientToken,
-      // 👈 sem createdAt aqui: Postgres preenche com default now()
+      // 👈 sem createdAt: Postgres preenche com default now()
     };
 
     const optimisticMsg: Message = {
       ...basePayload,
-      createdAt: new Date().toISOString(), // só para UI local
+      createdAt: new Date().toISOString(), // só pra UI local
     };
 
     console.log('[addMessage] called', { conversationId, text, senderType, basePayload });
@@ -407,14 +407,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const getConversation = (id: string) => conversations.find((c) => c.id === id);
 
+  // 👇 agora NÃO ordena mais, só mantém a ordem em que as mensagens chegaram no estado
   const getMessages = (conversationId: string) =>
-    messages
-      .filter((m) => m.conversationId === conversationId)
-      .slice()
-      .sort(
-        (a, b) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      );
+    messages.filter((m) => m.conversationId === conversationId);
 
   return (
     <ChatContext.Provider
