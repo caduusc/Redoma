@@ -92,38 +92,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveConvIdState(id);
   }, []);
 
-  // 🔁 helper: refetch das mensagens de uma conversa
-  const refreshMessages = useCallback(
-    async (conversationId: string) => {
-      try {
-        console.log('[refreshMessages] fetching from Supabase for conv', conversationId);
-
-        const { data, error } = await supabasePublic
-          .from('messages')
-          .select('*')
-          .eq('conversationId', conversationId)
-          .order('createdAt', { ascending: true });
-
-        if (error) {
-          console.error('[refreshMessages] error', error);
-          return;
-        }
-
-        if (!data) return;
-
-        const fresh = data as Message[];
-
-        setMessages((prev) => {
-          const other = prev.filter((m) => m.conversationId !== conversationId);
-          return [...other, ...fresh];
-        });
-      } catch (err) {
-        console.error('[refreshMessages] fatal', err);
-      }
-    },
-    []
-  );
-
   /* ===================== BOOT ===================== */
 
   useEffect(() => {
@@ -134,7 +102,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getOrCreateClientToken();
 
       // ============ MODO SUPORTE ============
-
       if (isAgent) {
         console.log('[ChatProvider boot] modo SUPORTE');
 
@@ -175,7 +142,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // ============ MODO CLIENTE ============
-
       console.log('[ChatProvider boot] modo CLIENTE, activeConvId =', activeConvId);
 
       if (activeConvId) {
@@ -281,7 +247,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       claimedBy: null,
       createdAt: new Date().toISOString(),
       clientToken,
-      // novo campo: amarra conversa ao membro
       memberId: memberId ?? null,
     };
 
@@ -297,36 +262,48 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     senderType: SenderType
   ) => {
     const clientToken = getOrCreateClientToken();
-    const msg: Message = {
+
+    const basePayload = {
       id:
         crypto?.randomUUID?.() ??
         (Math.random().toString(36).slice(2) + Date.now().toString(36)),
       conversationId,
       senderType,
-      messageType: 'text',
+      messageType: 'text' as const,
       text,
       clientToken,
-      createdAt: new Date().toISOString(),
+      // 👈 sem createdAt aqui: Postgres preenche com default now()
     };
 
-    console.log('[addMessage] called', { conversationId, text, senderType, msg });
+    const optimisticMsg: Message = {
+      ...basePayload,
+      createdAt: new Date().toISOString(), // só para UI local
+    };
+
+    console.log('[addMessage] called', { conversationId, text, senderType, basePayload });
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
 
-    // ✅ sempre plota localmente pro cliente (optimistic)
+    // plota localmente pro cliente (optimistic)
     if (senderType === 'client') {
-      upsertMessage(msg);
+      upsertMessage(optimisticMsg);
     }
 
     try {
-      const { error } = await client.from('messages').insert(msg);
+      const { data, error } = await client
+        .from('messages')
+        .insert(basePayload)
+        .select('*')
+        .single();
+
       if (error) {
         console.error('[addMessage] insert error', error);
         return;
       }
 
-      if (senderType === 'client') {
-        await refreshMessages(conversationId);
+      if (data) {
+        // sobrescreve com a versão do banco (createdAt real)
+        upsertMessage(data as Message);
       }
     } catch (err) {
       console.error('[addMessage] fatal', err);
@@ -354,36 +331,45 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     console.log('[sendImageMessage REAL] upload ok:', { publicUrl, path });
 
-    const msg: Message = {
+    const basePayload = {
       id:
         crypto?.randomUUID?.() ??
         (Math.random().toString(36).slice(2) + Date.now().toString(36)),
       conversationId,
       senderType,
-      messageType: 'image',
+      messageType: 'image' as const,
       text: '',
       imageUrl: publicUrl,
       storagePath: path,
       clientToken,
-      createdAt: new Date().toISOString(),
+      // 👈 sem createdAt: Postgres preenche
+    };
+
+    const optimisticMsg: Message = {
+      ...basePayload,
+      createdAt: new Date().toISOString(), // só pra UI local
     };
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
 
     if (senderType === 'client') {
-      upsertMessage(msg);
+      upsertMessage(optimisticMsg);
     }
 
     try {
-      const { error } = await client.from('messages').insert(msg);
+      const { data, error } = await client
+        .from('messages')
+        .insert(basePayload)
+        .select('*')
+        .single();
 
       if (error) {
         console.error('[sendImageMessage REAL] insert error', error);
         return;
       }
 
-      if (senderType === 'client') {
-        await refreshMessages(conversationId);
+      if (data) {
+        upsertMessage(data as Message);
       }
 
       console.log('[sendImageMessage REAL] mensagem de imagem inserida com sucesso');
