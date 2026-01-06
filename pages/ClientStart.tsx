@@ -59,17 +59,6 @@ const ClientStart: React.FC = () => {
   const [communitiesUsed, setCommunitiesUsed] = useState<string[]>([]);
   const [activeConversations, setActiveConversations] = useState<ConversationRow[]>([]);
 
-  // 🔁 Se já tiver sessão & conversa ativa, pula direto pro chat
-  useEffect(() => {
-    const memberSession = localStorage.getItem('redoma_member_session');
-    const activeConv = localStorage.getItem('redoma_active_conv');
-    const community = localStorage.getItem('redoma_client_cid');
-
-    if (memberSession && activeConv && community) {
-      navigate('/client/chat');
-    }
-  }, [navigate]);
-
   /* ========= STEP 1: NOME ========= */
 
   const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

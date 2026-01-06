@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
@@ -20,7 +19,13 @@ const getOrCreateClientToken = () => {
 
 const ClientChat: React.FC = () => {
   const navigate = useNavigate();
-  const { getConversation, getMessages, addMessage, sendImageMessage } = useChat();
+  const {
+    getConversation,
+    getMessages,
+    addMessage,
+    sendImageMessage,
+    setActiveConversationId,
+  } = useChat();
   const [convId, setConvId] = useState<string | null>(null);
 
   // ✅ 1) Recupera conversa ativa (local) ou busca no Supabase a mais recente aberta
@@ -223,14 +228,20 @@ const ClientChat: React.FC = () => {
     }
   };
 
+  const handleBack = () => {
+    // limpa conversa ativa e volta pra seleção de comunidade/conversa
+    setActiveConversationId(null);
+    localStorage.removeItem('redoma_active_conv');
+    navigate('/client/start');
+  };
+
   return (
     <ChatLayout
       title={`Chat: ${conversation?.communityId || 'Carregando...'}`}
       showBack
-      onBack={() => navigate('/client/start')}
+      onBack={handleBack}
       actions={
         <div className="flex items-center gap-2">
-          {/* Removido 'hidden sm:flex' para garantir visibilidade no Mobile */}
           <button
             onClick={() => navigate('/client/providers')}
             className="flex items-center gap-1.5 text-[10px] font-bold bg-white/10 text-white px-3 py-1.5 rounded-full hover:bg-white/20 transition-colors border border-white/10 uppercase tracking-widest"
@@ -256,7 +267,7 @@ const ClientChat: React.FC = () => {
           )}
         </div>
 
-        {/* Área de mensagens scrollável */}
+        {/* Área de mensagens scrollável */}      
         <div className="flex-1 min-h-0">
           <MessageList
             messages={messages}
@@ -265,7 +276,7 @@ const ClientChat: React.FC = () => {
           />
         </div>
 
-        {/* Footer fixo com input*/}
+        {/* Footer fixo com input*/}      
         <div className="shrink-0 border-t border-slate-100 bg-white">
           <MessageInput
             onSend={handleSend}
