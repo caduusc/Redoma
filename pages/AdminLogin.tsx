@@ -28,7 +28,7 @@ const AdminLogin: React.FC = () => {
       const userId = data.user?.id;
       if (!userId) {
         await supabaseMaster.auth.signOut();
-        alert('Sessão inválida. Tente novamente.');
+        alert('Sessão inválida. Tente novamente');
         return;
       }
 
