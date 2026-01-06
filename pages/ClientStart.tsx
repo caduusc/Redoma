@@ -270,7 +270,11 @@ const ClientStart: React.FC = () => {
   /* ======================= RENDER ======================= */
 
   const renderIdentityStep = () => (
-    <form onSubmit={handleSubmitIdentity} className="p-10 space-y-6 pt-6">
+    <form
+      onSubmit={handleSubmitIdentity}
+      className="p-10 space-y-6 pt-6"
+      autoComplete="on" // 👈 habilita autocomplete nativo do navegador
+    >
       <div className="space-y-2">
         <label
           htmlFor="fullName"
@@ -280,6 +284,8 @@ const ClientStart: React.FC = () => {
         </label>
         <input
           id="fullName"
+          name="fullName"
+          autoComplete="name"
           type="text"
           placeholder="Ex: João da Silva Souza"
           value={fullName}
@@ -310,6 +316,8 @@ const ClientStart: React.FC = () => {
         </label>
         <input
           id="phone"
+          name="phone"
+          autoComplete="tel"
           type="tel"
           inputMode="tel"
           placeholder="Ex: 11987654321"
