@@ -285,6 +285,12 @@ const ClientStart: React.FC = () => {
         (c) => c.communityId === normalizedId
       );
       if (existingActive) {
+        // limpa o badge localmente
+        setUnreadByConvId((prev) => ({
+          ...prev,
+          [existingActive.id]: false,
+        }));
+
         setActiveConversationId(existingActive.id);
         localStorage.setItem('redoma_client_cid', normalizedId);
         navigate('/client/chat');
@@ -367,6 +373,12 @@ const ClientStart: React.FC = () => {
   /* ========= CONTINUAR CONVERSA ATIVA (últimas 24h) ========= */
 
   const handleContinueConversation = (conv: ConversationRow) => {
+    // limpa badge localmente assim que o usuário entra
+    setUnreadByConvId((prev) => ({
+      ...prev,
+      [conv.id]: false,
+    }));
+
     setActiveConversationId(conv.id);
     localStorage.setItem('redoma_client_cid', conv.communityId);
     navigate('/client/chat');
