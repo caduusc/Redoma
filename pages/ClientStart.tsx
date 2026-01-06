@@ -36,14 +36,15 @@ type ConversationRow = {
   communityId: string;
   status: string | null;
   createdAt: string;
+  last_client_seen_at: string | null;
 };
 
 const ClientStart: React.FC = () => {
   const navigate = useNavigate();
   const { createConversation, setActiveConversationId } = useChat();
 
-  // garante token do cliente (usado para mensagens/RPC, mas não mais para listar conversas)
-  const clientToken = useMemo(() => getOrCreateClientToken(), []);
+  // garante token do cliente (para outras partes do app)
+  const _clientToken = useMemo(() => getOrCreateClientToken(), []);
 
   // dados de identidade vindos do localStorage (se existirem)
   const [fullName, setFullName] = useState<string>(
@@ -77,6 +78,7 @@ const ClientStart: React.FC = () => {
 
   const [communitiesUsed, setCommunitiesUsed] = useState<string[]>([]);
   const [activeConversations, setActiveConversations] = useState<ConversationRow[]>([]);
+  const [unreadByConvId, setUnreadByConvId] = useState<Record<string, boolean>>({});
 
   /* ========= STEP 1: IDENTIDADE (nome + celular) ========= */
 
@@ -120,7 +122,7 @@ const ClientStart: React.FC = () => {
   };
 
   /* ========= STEP 2: BUSCAR COMUNIDADES / CONVERSAS =========
-     Agora por phone_normalized -> members.member_id -> conversations.memberId
+     Busca por phone_normalized -> members.member_id -> conversations.memberId
   */
 
   useEffect(() => {
@@ -131,17 +133,18 @@ const ClientStart: React.FC = () => {
       setCommunityError(null);
 
       try {
-        // 1) Recupera telefone normalizado da memória / localStorage
+        // 1) Recupera telefone normalizado
         const phoneFromState = phone || localStorage.getItem('redoma_phone') || '';
         const phoneNorm = normalizePhone(phoneFromState);
 
         if (!phoneNorm) {
           setCommunitiesUsed([]);
           setActiveConversations([]);
+          setUnreadByConvId({});
           return;
         }
 
-        // 2) Busca todos os members com esse phone_normalized
+        // 2) Busca members por phone_normalized
         const { data: members, error: memErr } = await supabasePublic
           .from('members')
           .select('member_id')
@@ -152,13 +155,14 @@ const ClientStart: React.FC = () => {
           setCommunityError('Não foi possível carregar suas comunidades.');
           setCommunitiesUsed([]);
           setActiveConversations([]);
+          setUnreadByConvId({});
           return;
         }
 
         if (!members || members.length === 0) {
-          // nunca conversou com esse número -> sem histórico
           setCommunitiesUsed([]);
           setActiveConversations([]);
+          setUnreadByConvId({});
           return;
         }
 
@@ -167,13 +171,14 @@ const ClientStart: React.FC = () => {
         if (memberIds.length === 0) {
           setCommunitiesUsed([]);
           setActiveConversations([]);
+          setUnreadByConvId({});
           return;
         }
 
-        // 3) Busca conversas atreladas a esses memberId
+        // 3) Busca conversas desses members
         const { data, error } = await supabasePublic
           .from('conversations')
-          .select('id, communityId, status, createdAt')
+          .select('id, communityId, status, createdAt, last_client_seen_at')
           .in('memberId', memberIds)
           .order('createdAt', { ascending: false });
 
@@ -182,6 +187,7 @@ const ClientStart: React.FC = () => {
           setCommunityError('Não foi possível carregar suas comunidades.');
           setCommunitiesUsed([]);
           setActiveConversations([]);
+          setUnreadByConvId({});
           return;
         }
 
@@ -204,7 +210,54 @@ const ClientStart: React.FC = () => {
           return within24h && isOpen;
         });
 
-        setActiveConversations(active);
+        // 4) AGRUPA: 1 conversa ativa por comunidade (a mais recente)
+        const byCommunity = new Map<string, ConversationRow>();
+        for (const c of active) {
+          if (!byCommunity.has(c.communityId)) {
+            byCommunity.set(c.communityId, c);
+          }
+        }
+        const dedupedActive = Array.from(byCommunity.values());
+        setActiveConversations(dedupedActive);
+
+        // 5) Calcula "tem nova mensagem do agente?" para cada conversa ativa
+        if (dedupedActive.length === 0) {
+          setUnreadByConvId({});
+          return;
+        }
+
+        const activeIds = dedupedActive.map((c) => c.id);
+
+        const { data: msgs, error: msgErr } = await supabasePublic
+          .from('messages')
+          .select('conversationId, senderType, createdAt')
+          .in('conversationId', activeIds)
+          .eq('senderType', 'agent');
+
+        if (msgErr || !msgs) {
+          if (msgErr) {
+            console.error('[ClientStart] fetch messages for unread error', msgErr);
+          }
+          setUnreadByConvId({});
+          return;
+        }
+
+        const unreadMap: Record<string, boolean> = {};
+        for (const conv of dedupedActive) {
+          const lastSeenTs = conv.last_client_seen_at
+            ? new Date(conv.last_client_seen_at).getTime()
+            : 0;
+
+          const hasUnread = (msgs as any[]).some((m) => {
+            if (m.conversationId !== conv.id) return false;
+            const msgTs = new Date(m.createdAt).getTime();
+            return msgTs > lastSeenTs;
+          });
+
+          unreadMap[conv.id] = hasUnread;
+        }
+
+        setUnreadByConvId(unreadMap);
       } finally {
         setLoadingCommunities(false);
       }
@@ -213,7 +266,7 @@ const ClientStart: React.FC = () => {
     fetchCommunitiesAndConversations();
   }, [step, phone]);
 
-  /* ========= HELPERS PARA CRIAR CONVERSA NOVA ========= */
+  /* ========= HELPERS PARA CRIAR / REUTILIZAR CONVERSA ========= */
 
   const startConversationForCommunity = async (communityId: string) => {
     setSubmittingConversation(true);
@@ -226,6 +279,17 @@ const ClientStart: React.FC = () => {
 
       if (!normalizedId || !rawName || !phoneNorm) {
         setCommunityError('Informe o ID da comunidade, seu nome e celular.');
+        return;
+      }
+
+      // 🔁 0) Se já existir conversa ATIVA (24h) dessa comunidade, reutiliza
+      const existingActive = activeConversations.find(
+        (c) => c.communityId === normalizedId
+      );
+      if (existingActive) {
+        setActiveConversationId(existingActive.id);
+        localStorage.setItem('redoma_client_cid', normalizedId);
+        navigate('/client/chat');
         return;
       }
 
@@ -282,9 +346,8 @@ const ClientStart: React.FC = () => {
       // 4) Mantém compatibilidade com o resto do app
       localStorage.setItem('redoma_client_cid', normalizedId);
 
-      // 5) Cria conversa já amarrada ao memberId (via ChatContext.createConversation)
+      // 5) Cria conversa nova
       await createConversation(normalizedId);
-
       navigate('/client/chat');
     } catch (err) {
       console.error('Erro ao iniciar conversa:', err);
@@ -317,7 +380,7 @@ const ClientStart: React.FC = () => {
     <form
       onSubmit={handleSubmitIdentity}
       className="p-10 space-y-6 pt-6"
-      autoComplete="on" // autocomplete nativo
+      autoComplete="on"
     >
       <div className="space-y-2">
         <label
@@ -443,22 +506,28 @@ const ClientStart: React.FC = () => {
             </p>
           ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {activeConversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  type="button"
-                  onClick={() => handleContinueConversation(conv)}
-                  className="w-full flex items-center justify-between rounded-2xl border border-redoma-steel/10 bg-slate-50 px-4 py-3 text-left text-[11px] text-slate-700 hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition"
-                >
-                  <span className="truncate">
-                    Comunidade:{' '}
-                    <span className="font-semibold">{conv.communityId}</span>
-                  </span>
-                  <span className="text-[10px] uppercase tracking-widest text-redoma-steel font-bold">
-                    Continuar
-                  </span>
-                </button>
-              ))}
+              {activeConversations.map((conv) => {
+                const hasUnread = !!unreadByConvId[conv.id];
+                return (
+                  <button
+                    key={conv.id}
+                    type="button"
+                    onClick={() => handleContinueConversation(conv)}
+                    className="w-full flex items-center justify-between rounded-2xl border border-redoma-steel/10 bg-slate-50 px-4 py-3 text-left text-[11px] text-slate-700 hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition"
+                  >
+                    <span className="truncate">
+                      Comunidade:{' '}
+                      <span className="font-semibold">{conv.communityId}</span>
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] uppercase tracking-widest text-redoma-steel font-bold">
+                      {hasUnread && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      )}
+                      <span>Continuar</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
