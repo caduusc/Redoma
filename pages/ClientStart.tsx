@@ -23,8 +23,11 @@ const normalizeFullName = (name: string) =>
     .replace(/\s+/g, ' ') // colapsa espaços
     .toLowerCase();
 
-// normaliza telefone: só dígitos (DDD + número)
-const normalizePhone = (phone: string) => phone.replace(/\D/g, '');
+// normaliza telefone: só dígitos, removendo DDI 55 se vier
+const normalizePhone = (phone: string) =>
+  phone
+    .replace(/\D/g, '') // só dígitos
+    .replace(/^55/, ''); // remove DDI Brasil se vier
 
 type Step = 'IDENTITY' | 'COMMUNITY';
 
@@ -83,7 +86,6 @@ const ClientStart: React.FC = () => {
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // deixa o usuário digitar livre, mas você pode aplicar máscara depois se quiser
     setPhone(e.target.value);
     if (phoneError) setPhoneError(null);
   };
@@ -109,9 +111,10 @@ const ClientStart: React.FC = () => {
 
     if (hasError) return;
 
-    // persiste identidade no localStorage
+    // persiste identidade no localStorage (já normalizado)
     localStorage.setItem('redoma_full_name', rawName);
     localStorage.setItem('redoma_phone', phoneNorm);
+    setPhone(phoneNorm); // garante que o estado está normalizado também
 
     setStep('COMMUNITY');
   };
