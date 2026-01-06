@@ -42,7 +42,7 @@ const ClientStart: React.FC = () => {
   const navigate = useNavigate();
   const { createConversation, setActiveConversationId } = useChat();
 
-  // garante token do cliente
+  // garante token do cliente (usado para mensagens/RPC, mas não mais para listar conversas)
   const clientToken = useMemo(() => getOrCreateClientToken(), []);
 
   // dados de identidade vindos do localStorage (se existirem)
@@ -119,7 +119,9 @@ const ClientStart: React.FC = () => {
     setStep('COMMUNITY');
   };
 
-  /* ========= STEP 2: BUSCAR COMUNIDADES / CONVERSAS ========= */
+  /* ========= STEP 2: BUSCAR COMUNIDADES / CONVERSAS =========
+     Agora por phone_normalized -> members.member_id -> conversations.memberId
+  */
 
   useEffect(() => {
     const fetchCommunitiesAndConversations = async () => {
@@ -129,15 +131,57 @@ const ClientStart: React.FC = () => {
       setCommunityError(null);
 
       try {
+        // 1) Recupera telefone normalizado da memória / localStorage
+        const phoneFromState = phone || localStorage.getItem('redoma_phone') || '';
+        const phoneNorm = normalizePhone(phoneFromState);
+
+        if (!phoneNorm) {
+          setCommunitiesUsed([]);
+          setActiveConversations([]);
+          return;
+        }
+
+        // 2) Busca todos os members com esse phone_normalized
+        const { data: members, error: memErr } = await supabasePublic
+          .from('members')
+          .select('member_id')
+          .eq('phone_normalized', phoneNorm);
+
+        if (memErr) {
+          console.error('[ClientStart] fetch members by phone error', memErr);
+          setCommunityError('Não foi possível carregar suas comunidades.');
+          setCommunitiesUsed([]);
+          setActiveConversations([]);
+          return;
+        }
+
+        if (!members || members.length === 0) {
+          // nunca conversou com esse número -> sem histórico
+          setCommunitiesUsed([]);
+          setActiveConversations([]);
+          return;
+        }
+
+        const memberIds = members.map((m: any) => m.member_id).filter(Boolean);
+
+        if (memberIds.length === 0) {
+          setCommunitiesUsed([]);
+          setActiveConversations([]);
+          return;
+        }
+
+        // 3) Busca conversas atreladas a esses memberId
         const { data, error } = await supabasePublic
           .from('conversations')
           .select('id, communityId, status, createdAt')
-          .eq('client_token', clientToken)
+          .in('memberId', memberIds)
           .order('createdAt', { ascending: false });
 
         if (error) {
-          console.error('[ClientStart] fetch conversations error', error);
+          console.error('[ClientStart] fetch conversations by memberId error', error);
           setCommunityError('Não foi possível carregar suas comunidades.');
+          setCommunitiesUsed([]);
+          setActiveConversations([]);
           return;
         }
 
@@ -167,7 +211,7 @@ const ClientStart: React.FC = () => {
     };
 
     fetchCommunitiesAndConversations();
-  }, [step, clientToken]);
+  }, [step, phone]);
 
   /* ========= HELPERS PARA CRIAR CONVERSA NOVA ========= */
 
@@ -273,7 +317,7 @@ const ClientStart: React.FC = () => {
     <form
       onSubmit={handleSubmitIdentity}
       className="p-10 space-y-6 pt-6"
-      autoComplete="on" // 👈 habilita autocomplete nativo do navegador
+      autoComplete="on" // autocomplete nativo
     >
       <div className="space-y-2">
         <label
