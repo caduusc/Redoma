@@ -3,12 +3,20 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = 'https://wjpkvdkmkoojjmnjdtnk.supabase.co';
 const supabaseAnonKey = 'sb_publishable_9tyk3EMUSLUy3VkK9yypaQ_NWRYPmUl';
 
+// helper: pega o token do client (RLS usa header x-client-token)
+const getClientToken = () => localStorage.getItem('redoma_client_token') || '';
+
 // 1) Público (cliente) — NÃO persistir sessão pra não sujar login do suporte/master
 export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: false,
     autoRefreshToken: false,
     detectSessionInUrl: false,
+  },
+  global: {
+    headers: {
+      'x-client-token': getClientToken(),
+    },
   },
 });
 
