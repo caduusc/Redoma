@@ -9,20 +9,39 @@ import { LayoutGrid } from 'lucide-react';
 
 const ClientChat: React.FC = () => {
   const navigate = useNavigate();
-  const { conversation, messages, sendMessage, sendImage, hasUnreadFromAgent, setActiveConversationId } =
-    useChat();
+  const {
+    conversation,
+    messages,
+    sendMessage,
+    sendImage,
+    hasUnreadFromAgent,
+    setActiveConversationId,
+  } = useChat();
 
   const [communityName, setCommunityName] = useState<string | null>(null);
+  const [loadingTitle, setLoadingTitle] = useState<boolean>(true);
+
+  // ✅ fallback: tenta pegar o communityId do localStorage (setado no ClientStart)
+  const communityIdForTitle = useMemo(() => {
+    return (
+      conversation?.communityId ||
+      localStorage.getItem('redoma_client_cid') ||
+      null
+    );
+  }, [conversation?.communityId]);
 
   // 🔥 resolve communityId -> name (para o título)
   useEffect(() => {
-    const cid = conversation?.communityId;
+    const cid = communityIdForTitle;
+
     if (!cid) {
       setCommunityName(null);
+      setLoadingTitle(false);
       return;
     }
 
     let cancelled = false;
+    setLoadingTitle(true);
 
     (async () => {
       const { data, error } = await supabasePublic
@@ -36,40 +55,42 @@ const ClientChat: React.FC = () => {
       if (error) {
         console.error('[ClientChat] fetch community name error', error);
         setCommunityName(null);
+        setLoadingTitle(false);
         return;
       }
 
       setCommunityName(data?.name || null);
+      setLoadingTitle(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [conversation?.communityId]);
+  }, [communityIdForTitle]);
 
   const titleLabel = useMemo(() => {
     if (communityName) return communityName;
-    if (conversation?.communityId) return conversation.communityId; // fallback
-    return 'Carregando...';
-  }, [communityName, conversation?.communityId]);
+    if (loadingTitle) return 'Carregando...';
+    if (communityIdForTitle) return communityIdForTitle; // fallback final (ID)
+    return 'Chat';
+  }, [communityName, loadingTitle, communityIdForTitle]);
 
   const handleSend = async (text: string) => {
-    const convId = conversation?.id;
-    if (!convId) return;
-
+    if (!conversation?.id) return;
     await sendMessage(text);
   };
 
   const handleSendImage = async (file: File) => {
-    const convId = conversation?.id;
-    if (!convId) return;
-
+    if (!conversation?.id) return;
     await sendImage(file);
   };
 
   const handleBack = () => {
     setActiveConversationId(null);
     localStorage.removeItem('redoma_active_conv');
+    // mantém redoma_client_cid pra título fallback funcionar em refresh,
+    // mas se quiser limpar também, descomenta a linha abaixo:
+    // localStorage.removeItem('redoma_client_cid');
     navigate('/client/start');
   };
 
