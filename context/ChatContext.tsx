@@ -20,9 +20,17 @@ interface ChatContextType {
 
   createConversation: (communityId: string) => Promise<string>;
 
-  addMessage: (conversationId: string, text: string, senderType: SenderType) => Promise<void>;
+  addMessage: (
+    conversationId: string,
+    text: string,
+    senderType: SenderType
+  ) => Promise<void>;
 
-  sendImageMessage: (conversationId: string, file: File, senderType: SenderType) => Promise<void>;
+  sendImageMessage: (
+    conversationId: string,
+    file: File,
+    senderType: SenderType
+  ) => Promise<void>;
 
   claimConversation: (conversationId: string) => Promise<void>;
   closeConversation: (conversationId: string) => Promise<void>;
@@ -35,6 +43,8 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
+/* ===================== TOKEN ===================== */
+
 const getOrCreateClientToken = () => {
   const existing = localStorage.getItem('redoma_client_token');
   if (existing) return existing;
@@ -46,6 +56,8 @@ const getOrCreateClientToken = () => {
   localStorage.setItem('redoma_client_token', token);
   return token;
 };
+
+/* ===================== PROVIDER ===================== */
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -65,7 +77,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const upsertConversation = useCallback((conv: Conversation) => {
     setConversations((prev) => {
-      const exists = prev.some((c) => c.id === conv.id);
+      const exists = prev.find((c) => c.id === conv.id);
       if (!exists) return [...prev, conv];
       return prev.map((c) => (c.id === conv.id ? conv : c));
     });
@@ -93,23 +105,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const boot = async () => {
       getOrCreateClientToken();
 
-      // ============ MODO SUPORTE ============
+      /* ===== SUPORTE ===== */
       if (isAgent) {
-        console.log('[ChatProvider boot] modo SUPORTE');
-
-        const { data: convs, error: convErr } = await supabaseSupport
+        const { data: convs } = await supabaseSupport
           .from('conversations')
           .select('*');
 
-        if (convErr) console.error('[support fetch conversations]', convErr);
-        setConversations((convs || []) as Conversation[]);
-
-        const { data: msgs, error: msgErr } = await supabaseSupport
+        const { data: msgs } = await supabaseSupport
           .from('messages')
           .select('*')
           .order('createdAt', { ascending: true });
 
-        if (msgErr) console.error('[support fetch messages]', msgErr);
+        setConversations((convs || []) as Conversation[]);
         setMessages((msgs || []) as Message[]);
 
         convChannel = supabaseSupport
@@ -117,9 +124,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .on(
             'postgres_changes' as any,
             { event: '*', schema: 'public', table: 'conversations' },
-            (p: any) => {
-              if (p?.new) upsertConversation(p.new as Conversation);
-            }
+            (p: any) => p?.new && upsertConversation(p.new)
           )
           .subscribe();
 
@@ -128,45 +133,37 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .on(
             'postgres_changes' as any,
             { event: 'INSERT', schema: 'public', table: 'messages' },
-            (p: any) => {
-              if (p?.new) upsertMessage(p.new as Message);
-            }
+            (p: any) => p?.new && upsertMessage(p.new)
           )
           .subscribe();
 
         return;
       }
 
-      // ============ MODO CLIENTE ============
-      console.log('[ChatProvider boot] modo CLIENTE, activeConvId =', activeConvId);
-
+      /* ===== CLIENTE ===== */
       if (!activeConvId) {
         setConversations([]);
         setMessages([]);
         return;
       }
 
-      const { data: conv, error: convErr } = await supabasePublic
+      const { data: conv } = await supabasePublic
         .from('conversations')
         .select('*')
         .eq('id', activeConvId)
         .maybeSingle();
 
-      if (convErr) console.error('[client fetch active conversation]', convErr);
-      setConversations(conv ? ([conv] as Conversation[]) : []);
-
-      const { data: msgs, error: msgErr } = await supabasePublic
+      const { data: msgs } = await supabasePublic
         .from('messages')
         .select('*')
         .eq('conversationId', activeConvId)
         .order('createdAt', { ascending: true });
 
-      if (msgErr) console.error('[client fetch active messages]', msgErr);
+      setConversations(conv ? [conv as Conversation] : []);
       setMessages((msgs || []) as Message[]);
 
-      // realtime: conversa
       convChannel = supabasePublic
-        .channel(`client_conversations_${activeConvId}`)
+        .channel(`client_conversation_${activeConvId}`)
         .on(
           'postgres_changes' as any,
           {
@@ -175,13 +172,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             table: 'conversations',
             filter: `id=eq.${activeConvId}`,
           },
-          (p: any) => {
-            if (p?.new) upsertConversation(p.new as Conversation);
-          }
+          (p: any) => p?.new && upsertConversation(p.new)
         )
         .subscribe();
 
-      // realtime: mensagens
       msgChannel = supabasePublic
         .channel(`client_messages_${activeConvId}`)
         .on(
@@ -192,9 +186,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             table: 'messages',
             filter: `conversationId=eq.${activeConvId}`,
           },
-          (p: any) => {
-            if (p?.new) upsertMessage(p.new as Message);
-          }
+          (p: any) => p?.new && upsertMessage(p.new)
         )
         .subscribe();
     };
@@ -224,74 +216,72 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const createConversation = async (communityId: string) => {
     const clientToken = getOrCreateClientToken();
+
     const id =
       (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
       Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-    let memberId: string | null = null;
-    const rawSession = localStorage.getItem('redoma_member_session');
-    if (rawSession) {
-      try {
-        const parsed = JSON.parse(rawSession) as { memberId?: string };
-        if (parsed?.memberId) memberId = parsed.memberId;
-      } catch {
-        // ignore
-      }
-    }
-
-    const conv: Conversation = {
+    const conv: any = {
       id,
       communityId,
-      status: 'open' as any,
+      status: 'open',
       claimedBy: null,
       createdAt: new Date().toISOString(),
-      clientToken,
-      memberId: memberId ?? null,
-    } as any;
 
-    const { error } = await supabasePublic.from('conversations').insert(conv as any);
-    if (error) {
-      console.error('[createConversation] insert error', error);
-      throw error;
-    }
+      // 🔑 OS DOIS CAMPOS (RLS SAFE)
+      client_token: clientToken,
+      clientToken: clientToken,
+    };
+
+    const { error } = await supabasePublic.from('conversations').insert(conv);
+    if (error) throw error;
 
     setActiveConversationId(id);
     upsertConversation(conv);
     return id;
   };
 
-  const addMessage = async (conversationId: string, text: string, senderType: SenderType) => {
+  const addMessage = async (
+    conversationId: string,
+    text: string,
+    senderType: SenderType
+  ) => {
     const clientToken = getOrCreateClientToken();
 
-    const payload = {
+    const payload: any = {
       id:
         (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
         Math.random().toString(36).slice(2) + Date.now().toString(36),
       conversationId,
       senderType,
-      messageType: 'text' as const,
+      messageType: 'text',
       text,
-      clientToken,
-      createdAt: new Date().toISOString(), // mantém consistência e ordenação
+      createdAt: new Date().toISOString(),
+
+      // 🔑 OS DOIS CAMPOS
+      client_token: clientToken,
+      clientToken: clientToken,
     };
 
-    // optimistic para ambos (evita “não aparece”)
-    upsertMessage(payload as any);
+    // optimistic SEM depender de realtime
+    upsertMessage(payload as Message);
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
-
     const { data, error } = await client.from('messages').insert(payload).select('*').single();
 
     if (error) {
       console.error('[addMessage] insert error', error);
-      // mantém no UI, mas sinaliza no console — se quiser, aqui dá pra marcar como "failed"
       return;
     }
 
     if (data) upsertMessage(data as Message);
   };
 
-  const sendImageMessage = async (conversationId: string, file: File, senderType: SenderType) => {
+  const sendImageMessage = async (
+    conversationId: string,
+    file: File,
+    senderType: SenderType
+  ) => {
     const clientToken = getOrCreateClientToken();
 
     const { publicUrl, path } = await uploadChatImage({
@@ -300,24 +290,26 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       senderType,
     });
 
-    const payload = {
+    const payload: any = {
       id:
         (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
         Math.random().toString(36).slice(2) + Date.now().toString(36),
       conversationId,
       senderType,
-      messageType: 'image' as const,
+      messageType: 'image',
       text: '',
       imageUrl: publicUrl,
       storagePath: path,
-      clientToken,
       createdAt: new Date().toISOString(),
+
+      // 🔑 OS DOIS CAMPOS
+      client_token: clientToken,
+      clientToken: clientToken,
     };
 
-    upsertMessage(payload as any);
+    upsertMessage(payload as Message);
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
-
     const { data, error } = await client.from('messages').insert(payload).select('*').single();
 
     if (error) {
@@ -384,6 +376,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useChat = () => {
   const ctx = useContext(ChatContext);
-  if (!ctx) throw new Error('useChat must be used within ChatProvider');
+  if (!ctx) throw new Error('useChat must be used dentro de ChatProvider');
   return ctx;
 };
