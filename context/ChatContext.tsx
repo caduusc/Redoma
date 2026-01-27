@@ -56,6 +56,63 @@ const getOrCreateClientToken = () => {
   return token;
 };
 
+/** ===================== NORMALIZERS (snake_case -> camelCase) ===================== */
+
+const normalizeConversation = (row: any): Conversation => {
+  if (!row) return row;
+
+  return {
+    ...row,
+
+    // ids / keys
+    id: row.id ?? row.conversation_id ?? row.conversationId,
+
+    // community
+    communityId: row.communityId ?? row.community_id ?? row.community,
+
+    // status / claimed
+    status: row.status ?? row.conversation_status ?? null,
+    claimedBy: row.claimedBy ?? row.claimed_by ?? null,
+
+    // member
+    memberId: row.memberId ?? row.member_id ?? null,
+
+    // client token (compat)
+    clientToken: row.clientToken ?? row.client_token ?? null,
+    client_token: row.client_token ?? row.clientToken ?? null,
+
+    // timestamps
+    createdAt: row.createdAt ?? row.created_at ?? row.created ?? row.createdAt,
+    last_client_seen_at:
+      row.last_client_seen_at ?? row.lastClientSeenAt ?? null,
+  } as any;
+};
+
+const normalizeMessage = (row: any): Message => {
+  if (!row) return row;
+
+  return {
+    ...row,
+
+    id: row.id ?? row.message_id,
+
+    conversationId:
+      row.conversationId ?? row.conversation_id ?? row.conversation,
+
+    senderType: row.senderType ?? row.sender_type,
+    messageType: row.messageType ?? row.message_type,
+
+    text: row.text ?? row.content ?? '',
+
+    imageUrl: row.imagelrow?.imageUrl ?? row.image_url ?? row.image ?? row.imageUrl,
+    storagePath: row.storagePath ?? row.storage_path ?? null,
+
+    clientToken: row.clientToken ?? row.client_token ?? null,
+
+    createdAt: row.createdAt ?? row.created_at ?? row.created ?? row.createdAt,
+  } as any;
+};
+
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -72,7 +129,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   /* ===================== HELPERS ===================== */
 
-  const upsertConversation = useCallback((conv: Conversation) => {
+  const upsertConversation = useCallback((raw: any) => {
+    const conv = normalizeConversation(raw);
+
     setConversations((prev) => {
       const exists = prev.find((c) => c.id === conv.id);
       if (!exists) return [conv, ...prev];
@@ -80,10 +139,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
-  // ✅ IMPORTANTE: permite atualizar mensagem "optimistic" quando o DB responder
-  // - Se já existir por id, substitui/mescla
-  // - Se não existir, insere
-  const upsertMessage = useCallback((msg: Message) => {
+  const upsertMessage = useCallback((raw: any) => {
+    const msg = normalizeMessage(raw);
+
     setMessages((prev) => {
       const idx = prev.findIndex((m) => m.id === msg.id);
       if (idx === -1) return [...prev, msg];
@@ -93,7 +151,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
-  // ✅ também útil: remover uma mensagem (rollback) se insert falhar
   const removeMessageById = useCallback((id: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
   }, []);
@@ -122,22 +179,33 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select('*');
 
         if (convErr) console.error('[support fetch conversations]', convErr);
-        if (convs) setConversations(convs as Conversation[]);
+        if (convs) setConversations((convs as any[]).map(normalizeConversation));
 
         const { data: msgs, error: msgErr } = await supabaseSupport
           .from('messages')
           .select('*')
-          .order('createdAt', { ascending: true });
+          .order('created_at', { ascending: true }); // prefer snake
+        // fallback: se created_at não existir, não quebra; supabase retorna erro só se column inexistente.
 
-        if (msgErr) console.error('[support fetch messages]', msgErr);
-        if (msgs) setMessages(msgs as Message[]);
+        if (msgErr) {
+          // tenta createdAt se schema for camel
+          const { data: msgs2, error: msgErr2 } = await supabaseSupport
+            .from('messages')
+            .select('*')
+            .order('createdAt', { ascending: true });
+
+          if (msgErr2) console.error('[support fetch messages]', msgErr2);
+          if (msgs2) setMessages((msgs2 as any[]).map(normalizeMessage));
+        } else {
+          if (msgs) setMessages((msgs as any[]).map(normalizeMessage));
+        }
 
         convChannel = supabaseSupport
           .channel('support_convs')
           .on(
             'postgres_changes' as any,
             { event: '*', schema: 'public', table: 'conversations' },
-            (p: any) => upsertConversation(p.new as Conversation)
+            (p: any) => upsertConversation(p.new)
           )
           .subscribe();
 
@@ -146,7 +214,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .on(
             'postgres_changes' as any,
             { event: 'INSERT', schema: 'public', table: 'messages' },
-            (p: any) => upsertMessage(p.new as Message)
+            (p: any) => upsertMessage(p.new)
           )
           .subscribe();
 
@@ -164,18 +232,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .maybeSingle();
 
         if (convErr) console.error('[client fetch active conversation]', convErr);
-        if (conv) setConversations([conv as Conversation]);
+        if (conv) setConversations([normalizeConversation(conv)]);
 
+        // tenta created_at primeiro, senão createdAt
         const { data: msgs, error: msgErr } = await supabasePublic
           .from('messages')
           .select('*')
-          .eq('conversationId', activeConvId)
-          .order('createdAt', { ascending: true });
+          .eq('conversation_id', activeConvId);
 
-        if (msgErr) console.error('[client fetch active messages]', msgErr);
-        if (msgs) setMessages(msgs as Message[]);
+        if (!msgErr && msgs) {
+          // se veio por conversation_id, ok
+          setMessages((msgs as any[]).map(normalizeMessage));
+        } else {
+          const { data: msgs2, error: msgErr2 } = await supabasePublic
+            .from('messages')
+            .select('*')
+            .eq('conversationId', activeConvId);
 
-        // realtime para o cliente
+          if (msgErr2) console.error('[client fetch active messages]', msgErr2);
+          if (msgs2) setMessages((msgs2 as any[]).map(normalizeMessage));
+        }
+
         convChannel = supabasePublic
           .channel(`client_conversations_${activeConvId}`)
           .on(
@@ -186,7 +263,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
               table: 'conversations',
               filter: `id=eq.${activeConvId}`,
             },
-            (p: any) => upsertConversation(p.new as Conversation)
+            (p: any) => upsertConversation(p.new)
           )
           .subscribe();
 
@@ -198,9 +275,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
               event: 'INSERT',
               schema: 'public',
               table: 'messages',
-              filter: `conversationId=eq.${activeConvId}`,
+              // ⚠️ filtro pode ser conversation_id no DB
+              // então a gente NÃO filtra aqui e filtra no upsert/getMessages
             },
-            (p: any) => upsertMessage(p.new as Message)
+            (p: any) => {
+              const incoming = normalizeMessage(p.new);
+              if (incoming.conversationId === activeConvId) {
+                upsertMessage(incoming);
+              }
+            }
           )
           .subscribe();
       } else {
@@ -236,7 +319,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const clientToken = getOrCreateClientToken();
     const id = genId();
 
-    // 🔹 Recupera memberId salvo na sessão (nome + comunidade)
     let memberId: string | null = null;
     const rawSession = localStorage.getItem('redoma_member_session');
     if (rawSession) {
@@ -248,80 +330,94 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    const conv: any = {
+    // ✅ manda os dois formatos (snake + camel)
+    const convPayload: any = {
       id,
-      communityId,
-      status: 'open' as const,
+      status: 'open',
       claimedBy: null,
-      createdAt: new Date().toISOString(),
+      claimed_by: null,
 
-      // compat: alguns lugares usam snake_case
-      client_token: clientToken,
-      clientToken: clientToken,
+      communityId,
+      community_id: communityId,
 
       memberId: memberId ?? null,
+      member_id: memberId ?? null,
+
+      clientToken,
+      client_token: clientToken,
+
+      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
     };
 
-    const { error } = await supabasePublic.from('conversations').insert(conv);
+    const { data, error } = await supabasePublic
+      .from('conversations')
+      .insert(convPayload)
+      .select('*')
+      .maybeSingle();
+
     if (error) {
       console.error('[createConversation] insert error', error);
       throw error;
     }
 
-    setActiveConversationId(id);
-    upsertConversation(conv as Conversation);
-    return id;
+    const finalConv = data ? normalizeConversation(data) : normalizeConversation(convPayload);
+
+    setActiveConversationId(finalConv.id);
+    upsertConversation(finalConv);
+    return finalConv.id;
   };
 
-  const addMessage = async (
-    conversationId: string,
-    text: string,
-    senderType: SenderType
-  ) => {
+  const addMessage = async (conversationId: string, text: string, senderType: SenderType) => {
     const clientToken = getOrCreateClientToken();
     const id = genId();
 
-    const basePayload: any = {
+    // ✅ optimistic (sempre)
+    upsertMessage({
       id,
       conversationId,
       senderType,
-      messageType: 'text' as const,
+      messageType: 'text',
       text,
       clientToken,
-      // 👈 sem createdAt: Postgres preenche com default now()
-    };
+      createdAt: new Date().toISOString(),
+    } as any);
 
-    const optimisticMsg: Message = {
-      ...(basePayload as any),
-      createdAt: new Date().toISOString(), // só pra UI local
+    const payload: any = {
+      id,
+
+      // compat:
+      conversationId,
+      conversation_id: conversationId,
+
+      senderType,
+      sender_type: senderType,
+
+      messageType: 'text',
+      message_type: 'text',
+
+      text,
+
+      clientToken,
+      client_token: clientToken,
     };
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
 
-    // ✅ optimistic sempre (cliente e agente), pra não ficar "sumindo"
-    upsertMessage(optimisticMsg);
+    const { data, error } = await client
+      .from('messages')
+      .insert(payload)
+      .select('*')
+      .maybeSingle();
 
-    try {
-      const { data, error } = await client
-        .from('messages')
-        .insert(basePayload)
-        .select('*')
-        .single();
-
-      if (error) {
-        console.error('[addMessage] insert error', error);
-        // rollback só se quiser (mantém pra debug ou remove pra UX)
-        removeMessageById(id);
-        return;
-      }
-
-      if (data) {
-        // substitui/mescla a versão do banco (createdAt real etc)
-        upsertMessage(data as Message);
-      }
-    } catch (err) {
-      console.error('[addMessage] fatal', err);
+    if (error) {
+      console.error('[addMessage] insert error', error);
       removeMessageById(id);
+      return;
+    }
+
+    if (data) {
+      upsertMessage(data);
     }
   };
 
@@ -333,26 +429,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const clientToken = getOrCreateClientToken();
     const id = genId();
 
-    console.log('[sendImageMessage] file:', {
-      name: file.name,
-      size: file.size,
-      type: file.type,
-    });
-
-    // ✅ optimistic placeholder (imagem carregando)
-    const optimisticMsg: Message = {
+    // optimistic placeholder
+    upsertMessage({
       id,
       conversationId,
       senderType,
-      messageType: 'image' as any,
+      messageType: 'image',
       text: '',
-      imageUrl: '', // placeholder
+      imageUrl: '',
       storagePath: '',
       clientToken,
       createdAt: new Date().toISOString(),
-    } as any;
-
-    upsertMessage(optimisticMsg);
+    } as any);
 
     try {
       const { publicUrl, path } = await uploadChatImage({
@@ -361,24 +449,37 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         senderType,
       });
 
-      const basePayload: any = {
+      const payload: any = {
         id,
+
         conversationId,
+        conversation_id: conversationId,
+
         senderType,
-        messageType: 'image' as const,
+        sender_type: senderType,
+
+        messageType: 'image',
+        message_type: 'image',
+
         text: '',
+
         imageUrl: publicUrl,
+        image_url: publicUrl,
+
         storagePath: path,
+        storage_path: path,
+
         clientToken,
+        client_token: clientToken,
       };
 
       const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
 
       const { data, error } = await client
         .from('messages')
-        .insert(basePayload)
+        .insert(payload)
         .select('*')
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('[sendImageMessage] insert error', error);
@@ -386,7 +487,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      if (data) upsertMessage(data as Message);
+      if (data) upsertMessage(data);
     } catch (err) {
       console.error('[sendImageMessage] fatal', err);
       removeMessageById(id);
@@ -398,13 +499,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data, error } = await supabaseSupport
       .from('conversations')
-      .update({ status: 'claimed', claimedBy })
+      .update({ status: 'claimed', claimedBy, claimed_by: claimedBy })
       .eq('id', conversationId)
       .select('*')
       .single();
 
     if (error) throw error;
-    upsertConversation(data as Conversation);
+    upsertConversation(data);
   };
 
   const closeConversation = async (conversationId: string) => {
@@ -416,12 +517,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .single();
 
     if (error) throw error;
-    upsertConversation(data as Conversation);
+    upsertConversation(data);
   };
 
   const getConversation = (id: string) => conversations.find((c) => c.id === id);
 
-  // ✅ mantém ordenação estável (createdAt), mas não quebra optimistic
   const getMessages = (conversationId: string) =>
     messages
       .filter((m) => m.conversationId === conversationId)
