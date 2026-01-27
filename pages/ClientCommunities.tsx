@@ -48,7 +48,9 @@ const ClientCommunities: React.FC = () => {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return communities;
+
     return communities.filter((c) => {
+      // 🔥 mantém slug na busca (sem exibir no card)
       const hay = `${c.name} ${c.slug || ''} ${c.id} ${c.description || ''}`.toLowerCase();
       return hay.includes(q);
     });
@@ -133,13 +135,10 @@ const ClientCommunities: React.FC = () => {
                     <div className="min-w-0">
                       <p className="font-extrabold text-slate-800 text-sm truncate">{c.name}</p>
 
+                      {/* ✅ só ID (não exibe slug) */}
                       <div className="mt-1 flex flex-wrap gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-500">
                           ID: {c.id}
-                        </span>
-
-                        <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-500">
-                          {c.slug ? `Slug: ${c.slug}` : 'Slug: -'}
                         </span>
                       </div>
                     </div>
@@ -159,7 +158,6 @@ const ClientCommunities: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        // deixa o ID fácil de copiar: salva no clipboard
                         navigator.clipboard?.writeText(c.id);
                       }}
                       className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-[10px] uppercase tracking-widest hover:bg-slate-100 transition"
