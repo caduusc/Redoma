@@ -9,6 +9,7 @@ import { CommunityProvider } from './context/CommunityContext';
 import ClientStart from './pages/ClientStart';
 import ClientChat from './pages/ClientChat';
 import ClientProviders from './pages/ClientProviders';
+import ClientCommunities from './pages/ClientCommunities';
 
 import AgentLogin from './pages/AgentLogin';
 import AgentInbox from './pages/AgentInbox';
@@ -32,6 +33,7 @@ const App: React.FC = () => {
               <Route path="/client/start" element={<ClientStart />} />
               <Route path="/client/chat" element={<ClientChat />} />
               <Route path="/client/providers" element={<ClientProviders />} />
+              <Route path="/client/communities" element={<ClientCommunities />} />
 
               {/* Support (com atrito / login) */}
               <Route path="/agent/login" element={<AgentLogin />} />

@@ -39,15 +39,6 @@ type ConversationRow = {
   last_client_seen_at: string | null;
 };
 
-type CommunityRow = {
-  id: string;
-  name: string;
-  slug?: string | null;
-  description?: string | null;
-  logo_url?: string | null;
-  isActive: boolean;
-};
-
 const ClientStart: React.FC = () => {
   const navigate = useNavigate();
   const { createConversation, setActiveConversationId } = useChat();
@@ -89,10 +80,6 @@ const ClientStart: React.FC = () => {
   const [activeConversations, setActiveConversations] = useState<ConversationRow[]>([]);
   const [unreadByConvId, setUnreadByConvId] = useState<Record<string, boolean>>({});
 
-  // 🔥 NOVO: catálogo de comunidades ativas (pra mostrar pro usuário)
-  const [availableCommunities, setAvailableCommunities] = useState<CommunityRow[]>([]);
-  const [loadingAvailable, setLoadingAvailable] = useState(false);
-
   /* ========= STEP 1: IDENTIDADE (nome + celular) ========= */
 
   const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,42 +113,13 @@ const ClientStart: React.FC = () => {
 
     if (hasError) return;
 
-    // persiste identidade no localStorage (já normalizado)
+    // persiste identidade no localStorage
     localStorage.setItem('redoma_full_name', rawName);
     localStorage.setItem('redoma_phone', phoneNorm);
-    setPhone(phoneNorm); // garante que o estado está normalizado também
+    setPhone(phoneNorm);
 
     setStep('COMMUNITY');
   };
-
-  /* ========= NOVO: BUSCAR CATÁLOGO DE COMUNIDADES ATIVAS ========= */
-
-  useEffect(() => {
-    const fetchAvailableCommunities = async () => {
-      if (step !== 'COMMUNITY') return;
-
-      setLoadingAvailable(true);
-      try {
-        const { data, error } = await supabasePublic
-          .from('communities')
-          .select('id, name, slug, description, logo_url, isActive')
-          .eq('isActive', true)
-          .order('name', { ascending: true });
-
-        if (error) {
-          console.error('[ClientStart] fetch available communities error', error);
-          setAvailableCommunities([]);
-          return;
-        }
-
-        setAvailableCommunities((data || []) as CommunityRow[]);
-      } finally {
-        setLoadingAvailable(false);
-      }
-    };
-
-    fetchAvailableCommunities();
-  }, [step]);
 
   /* ========= STEP 2: BUSCAR COMUNIDADES / CONVERSAS DO USUÁRIO ========= */
 
@@ -173,7 +131,6 @@ const ClientStart: React.FC = () => {
       setCommunityError(null);
 
       try {
-        // 1) Recupera telefone normalizado
         const phoneFromState = phone || localStorage.getItem('redoma_phone') || '';
         const phoneNorm = normalizePhone(phoneFromState);
 
@@ -184,7 +141,7 @@ const ClientStart: React.FC = () => {
           return;
         }
 
-        // 2) Busca members por phone_normalized
+        // members por phone_normalized
         const { data: members, error: memErr } = await supabasePublic
           .from('members')
           .select('member_id')
@@ -215,7 +172,7 @@ const ClientStart: React.FC = () => {
           return;
         }
 
-        // 3) Busca conversas desses members
+        // conversas desses members
         const { data, error } = await supabasePublic
           .from('conversations')
           .select('id, communityId, status, createdAt, last_client_seen_at')
@@ -250,17 +207,18 @@ const ClientStart: React.FC = () => {
           return within24h && isOpen;
         });
 
-        // AGRUPA: 1 conversa ativa por comunidade (a mais recente)
+        // 1 conversa ativa por comunidade (mais recente)
         const byCommunity = new Map<string, ConversationRow>();
         for (const c of active) {
           if (!byCommunity.has(c.communityId)) {
             byCommunity.set(c.communityId, c);
           }
         }
+
         const dedupedActive = Array.from(byCommunity.values());
         setActiveConversations(dedupedActive);
 
-        // 5) Calcula "tem nova mensagem do agente?" para cada conversa ativa
+        // unread (mensagem do agente após last_client_seen_at)
         if (dedupedActive.length === 0) {
           setUnreadByConvId({});
           return;
@@ -360,7 +318,7 @@ const ClientStart: React.FC = () => {
         return;
       }
 
-      // Resolve id OU slug -> id real
+      // resolve id OU slug -> id real
       const { data: comm, error: commErr } = await supabasePublic
         .from('communities')
         .select('id, slug')
@@ -378,10 +336,11 @@ const ClientStart: React.FC = () => {
 
       const resolvedCommunityId = comm.id;
 
-      // Se já existir conversa ATIVA (24h) dessa comunidade, reutiliza
+      // se já existir conversa ativa dessa comunidade, reutiliza
       const existingActive = activeConversations.find(
         (c) => c.communityId === resolvedCommunityId
       );
+
       if (existingActive) {
         setUnreadByConvId((prev) => ({
           ...prev,
@@ -418,7 +377,7 @@ const ClientStart: React.FC = () => {
         return;
       }
 
-      // sessão do membro
+      // sessão do membro (usada pelo app)
       const session = {
         memberId: memberData.member_id,
         communityId: memberData.community_id,
@@ -621,65 +580,15 @@ const ClientStart: React.FC = () => {
           )}
         </div>
 
-        {/* NOVO: Comunidades disponíveis */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Users size={16} className="text-redoma-steel" />
-            <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest">
-              Comunidades disponíveis
-            </h3>
-          </div>
-
-          {loadingAvailable ? (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Loader2 className="animate-spin" size={14} />
-              Carregando comunidades...
-            </div>
-          ) : availableCommunities.length === 0 ? (
-            <p className="text-[11px] text-slate-400">
-              Nenhuma comunidade ativa encontrada.
-            </p>
-          ) : (
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {availableCommunities.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => startConversationForCommunity(c.slug || c.id)}
-                  disabled={submittingConversation}
-                  className="w-full flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                  <span className="flex items-center gap-3 min-w-0">
-                    {c.logo_url ? (
-                      <img
-                        src={c.logo_url}
-                        alt={c.name}
-                        className="w-9 h-9 rounded-xl object-cover border border-slate-100"
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs">
-                        {c.name?.charAt(0) || 'C'}
-                      </div>
-                    )}
-
-                    <span className="min-w-0">
-                      <span className="block text-[12px] font-bold text-slate-800 truncate">
-                        {c.name}
-                      </span>
-                      <span className="block text-[10px] text-slate-400 truncate">
-                        {c.slug || c.id}
-                      </span>
-                    </span>
-                  </span>
-
-                  <span className="text-[10px] uppercase tracking-widest text-redoma-steel font-bold">
-                    Entrar
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* NOVO: botão catálogo de comunidades (página separada) */}
+        <button
+          type="button"
+          onClick={() => navigate('/client/communities')}
+          className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
+        >
+          <Users size={18} className="group-hover:scale-110 transition-transform" />
+          Conheça as comunidades e projetos sociais que apoiamos
+        </button>
 
         {/* Comunidades em que já contribuiu */}
         <div className="space-y-3">
