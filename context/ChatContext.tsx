@@ -37,17 +37,13 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 const getOrCreateClientToken = () => {
   const existing = localStorage.getItem('redoma_client_token');
-  if (existing) {
-    console.log('🔑 [Token] Usando token existente:', existing);
-    return existing;
-  }
+  if (existing) return existing;
 
   const token =
     (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
     Math.random().toString(36).slice(2) + Date.now().toString(36);
 
   localStorage.setItem('redoma_client_token', token);
-  console.log('🔑 [Token] Novo token criado:', token);
   return token;
 };
 
@@ -68,43 +64,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /* ===================== HELPERS ===================== */
 
   const upsertConversation = useCallback((conv: Conversation) => {
-    console.log('💬 [Conversation] Upsert:', {
-      id: conv.id,
-      status: conv.status,
-      community_id: conv.community_id,
-    });
     setConversations((prev) => {
       const exists = prev.some((c) => c.id === conv.id);
-      if (!exists) {
-        console.log('💬 [Conversation] Nova conversa adicionada');
-        return [...prev, conv];
-      }
-      console.log('💬 [Conversation] Conversa atualizada');
+      if (!exists) return [...prev, conv];
       return prev.map((c) => (c.id === conv.id ? conv : c));
     });
   }, []);
 
   const upsertMessage = useCallback((msg: Message) => {
-    console.log('📨 [Message] Tentando upsert:', {
-      id: msg.id,
-      conversation_id: msg.conversation_id,
-      sender_type: msg.sender_type,
-      message_type: msg.message_type,
-      text: msg.text?.substring(0, 30),
-      created_at: msg.created_at,
-    });
     setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) {
-        console.log('⚠️ [Message] Mensagem já existe, ignorando:', msg.id);
-        return prev;
-      }
-      console.log('✅ [Message] Nova mensagem adicionada. Total:', prev.length + 1);
+      if (prev.some((m) => m.id === msg.id)) return prev;
       return [...prev, msg];
     });
   }, []);
 
   const setActiveConversationId = useCallback((id: string | null) => {
-    console.log('🎯 [Active Conv] Mudando de', localStorage.getItem('redoma_active_conv'), 'para:', id);
     if (id) localStorage.setItem('redoma_active_conv', id);
     else localStorage.removeItem('redoma_active_conv');
     setActiveConvIdState(id);
@@ -121,117 +95,74 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // ============ MODO SUPORTE ============
       if (isAgent) {
-        console.log('🟢 ========== MODO SUPORTE ==========');
+        console.log('[ChatProvider boot] modo SUPORTE');
 
         const { data: convs, error: convErr } = await supabaseSupport
           .from('conversations')
           .select('*');
 
-        if (convErr) {
-          console.error('❌ [SUPORTE] Erro ao buscar conversas:', convErr);
-        } else {
-          console.log('✅ [SUPORTE] Conversas carregadas:', convs?.length);
-          console.table(convs);
-        }
+        if (convErr) console.error('[support fetch conversations]', convErr);
         setConversations((convs || []) as Conversation[]);
 
         const { data: msgs, error: msgErr } = await supabaseSupport
           .from('messages')
           .select('*')
-          .order('created_at', { ascending: true });
+          .order('createdAt', { ascending: true });
 
-        if (msgErr) {
-          console.error('❌ [SUPORTE] Erro ao buscar mensagens:', msgErr);
-        } else {
-          console.log('✅ [SUPORTE] Mensagens carregadas:', msgs?.length);
-          console.table(msgs);
-        }
+        if (msgErr) console.error('[support fetch messages]', msgErr);
         setMessages((msgs || []) as Message[]);
-
-        console.log('📡 [SUPORTE] Iniciando realtime subscriptions...');
 
         convChannel = supabaseSupport
           .channel('support_convs')
           .on(
             'postgres_changes' as any,
             { event: '*', schema: 'public', table: 'conversations' },
-            (payload: any) => {
-              console.log('🟢 [SUPORTE Realtime] Evento em conversations:', payload);
-              if (payload?.new) upsertConversation(payload.new as Conversation);
+            (p: any) => {
+              if (p?.new) upsertConversation(p.new as Conversation);
             }
           )
-          .subscribe((status) => {
-            console.log('🟢 [SUPORTE Realtime] Status conversations:', status);
-          });
+          .subscribe();
 
         msgChannel = supabaseSupport
           .channel('support_msgs')
           .on(
             'postgres_changes' as any,
             { event: 'INSERT', schema: 'public', table: 'messages' },
-            (payload: any) => {
-              console.log('🟢 [SUPORTE Realtime] Nova mensagem!', payload);
-              if (payload?.new) upsertMessage(payload.new as Message);
+            (p: any) => {
+              if (p?.new) upsertMessage(p.new as Message);
             }
           )
-          .subscribe((status) => {
-            console.log('🟢 [SUPORTE Realtime] Status messages:', status);
-          });
+          .subscribe();
 
         return;
       }
 
       // ============ MODO CLIENTE ============
-      console.log('🔵 ========== MODO CLIENTE ==========');
-      console.log('🔵 Token:', token);
-      console.log('🔵 Active Conv ID:', activeConvId);
+      console.log('[ChatProvider boot] modo CLIENTE, token =', token, 'activeConvId =', activeConvId);
 
       if (!activeConvId) {
-        console.log('⚠️ [CLIENTE] Sem conversa ativa');
         setConversations([]);
         setMessages([]);
         return;
       }
 
-      console.log('🔵 [CLIENTE] Buscando conversa:', activeConvId);
       const { data: conv, error: convErr } = await supabasePublic
         .from('conversations')
         .select('*')
         .eq('id', activeConvId)
         .maybeSingle();
 
-      if (convErr) {
-        console.error('❌ [CLIENTE] Erro ao buscar conversa:', convErr);
-      } else if (!conv) {
-        console.error('❌ [CLIENTE] Conversa não encontrada!');
-      } else {
-        console.log('✅ [CLIENTE] Conversa encontrada:', conv);
-      }
+      if (convErr) console.error('[client fetch active conversation]', convErr);
       setConversations(conv ? ([conv] as Conversation[]) : []);
 
-      console.log('🔵 [CLIENTE] Buscando mensagens da conversa:', activeConvId);
       const { data: msgs, error: msgErr } = await supabasePublic
         .from('messages')
         .select('*')
-        .eq('conversation_id', activeConvId)
-        .order('created_at', { ascending: true });
+        .eq('conversationId', activeConvId)
+        .order('createdAt', { ascending: true });
 
-      if (msgErr) {
-        console.error('❌ [CLIENTE] Erro ao buscar mensagens:', msgErr);
-        console.error('❌ Detalhes:', {
-          message: msgErr.message,
-          details: msgErr.details,
-          hint: msgErr.hint,
-          code: msgErr.code,
-        });
-      } else {
-        console.log('✅ [CLIENTE] Mensagens encontradas:', msgs?.length);
-        console.table(msgs);
-      }
+      if (msgErr) console.error('[client fetch active messages]', msgErr);
       setMessages((msgs || []) as Message[]);
-
-      console.log('📡 [CLIENTE] Iniciando realtime subscriptions...');
-      console.log('📡 [CLIENTE] Filtro: conversation_id=eq.' + activeConvId);
 
       // realtime: conversa
       convChannel = supabasePublic
@@ -244,19 +175,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             table: 'conversations',
             filter: `id=eq.${activeConvId}`,
           },
-          (payload: any) => {
-            console.log('🔵 [CLIENTE Realtime] Evento em conversations:', payload);
-            if (payload?.new) upsertConversation(payload.new as Conversation);
+          (p: any) => {
+            if (p?.new) upsertConversation(p.new as Conversation);
           }
         )
-        .subscribe((status) => {
-          console.log('🔵 [CLIENTE Realtime] Status conversations:', status);
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ [CLIENTE] Canal conversations CONECTADO!');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ [CLIENTE] ERRO no canal conversations!');
-          }
-        });
+        .subscribe();
 
       // realtime: mensagens
       msgChannel = supabasePublic
@@ -267,27 +190,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             event: 'INSERT',
             schema: 'public',
             table: 'messages',
-            filter: `conversation_id=eq.${activeConvId}`,
+            filter: `conversationId=eq.${activeConvId}`,
           },
-          (payload: any) => {
-            console.log('🔵 [CLIENTE Realtime] Nova mensagem recebida!', payload);
-            if (payload?.new) upsertMessage(payload.new as Message);
+          (p: any) => {
+            if (p?.new) upsertMessage(p.new as Message);
           }
         )
-        .subscribe((status) => {
-          console.log('🔵 [CLIENTE Realtime] Status messages:', status);
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ [CLIENTE] Canal messages CONECTADO!');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ [CLIENTE] ERRO no canal messages!');
-          }
-        });
+        .subscribe();
     };
 
     boot();
 
     return () => {
-      console.log('🔌 [Cleanup] Desconectando canais realtime');
       convChannel?.unsubscribe?.();
       msgChannel?.unsubscribe?.();
     };
@@ -297,13 +211,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = (email: string) => {
     const user: User = { id: 'agent', name: 'Atendente Redoma', email, role: 'agent' };
-    console.log('👤 [Auth] Login:', user);
     setCurrentUser(user);
     localStorage.setItem('redoma_current_user', JSON.stringify(user));
   };
 
   const logout = () => {
-    console.log('👤 [Auth] Logout');
     setCurrentUser(null);
     localStorage.removeItem('redoma_current_user');
   };
@@ -315,11 +227,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const id =
       (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
       Math.random().toString(36).slice(2) + Date.now().toString(36);
-
-    console.log('💬 ========== CRIANDO CONVERSA ==========');
-    console.log('💬 ID:', id);
-    console.log('💬 Community ID:', communityId);
-    console.log('💬 Client Token:', clientToken);
 
     let memberId: string | null = null;
     const rawSession = localStorage.getItem('redoma_member_session');
@@ -334,15 +241,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const conv = {
       id,
-      community_id: communityId,
+      communityId,
       status: 'open',
-      claimed_by: null,
-      created_at: new Date().toISOString(),
-      member_id: memberId ?? null,
+      claimedBy: null,
+      createdAt: new Date().toISOString(),
+      memberId: memberId ?? null,
       client_token: clientToken,
     };
-
-    console.log('💬 Payload:', conv);
 
     const { data, error } = await supabasePublic
       .from('conversations')
@@ -351,7 +256,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .single();
 
     if (error) {
-      console.error('❌ [createConversation] ERRO:', {
+      console.error('[createConversation] insert error', {
         message: error.message,
         details: error.details,
         hint: error.hint,
@@ -360,8 +265,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw error;
     }
 
-    console.log('✅ [createConversation] Conversa criada com sucesso!');
-    console.log('✅ Data retornada:', data);
     if (data) upsertConversation(data as any);
 
     setActiveConversationId(id);
@@ -371,55 +274,40 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addMessage = async (conversationId: string, text: string, senderType: SenderType) => {
     const clientToken = getOrCreateClientToken();
 
-    console.log('📤 ========== ENVIANDO MENSAGEM ==========');
-    console.log('📤 Conversation ID:', conversationId);
-    console.log('📤 Sender Type:', senderType);
-    console.log('📤 Text:', text.substring(0, 50));
-    console.log('📤 Client Token:', clientToken);
-
     const payload = {
       id:
         (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
         Math.random().toString(36).slice(2) + Date.now().toString(36),
-      conversation_id: conversationId,
-      sender_type: senderType,
-      message_type: 'text' as const,
+      conversationId,
+      senderType,
+      messageType: 'text' as const,
       text,
       client_token: clientToken,
-      created_at: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
     };
 
-    console.log('📤 Payload completo:', payload);
-
     // optimistic local
-    console.log('📤 Adicionando mensagem otimisticamente...');
     upsertMessage(payload as any);
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
-    console.log('📤 Usando client:', senderType === 'agent' ? 'supabaseSupport' : 'supabasePublic');
 
     const { data, error } = await client.from('messages').insert(payload as any).select('*').single();
 
     if (error) {
-      console.error('❌ [addMessage] ERRO AO INSERIR:', {
+      console.error('[addMessage] insert error', {
         message: error.message,
         details: error.details,
         hint: error.hint,
         code: error.code,
-        payload: payload,
       });
       return;
     }
 
-    console.log('✅ [addMessage] Mensagem inserida com SUCESSO!');
-    console.log('✅ Data retornada:', data);
     if (data) upsertMessage(data as Message);
   };
 
   const sendImageMessage = async (conversationId: string, file: File, senderType: SenderType) => {
     const clientToken = getOrCreateClientToken();
-
-    console.log('📸 [sendImageMessage] Iniciando upload...');
 
     const { publicUrl, path } = await uploadChatImage({
       file,
@@ -427,20 +315,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       senderType,
     });
 
-    console.log('📸 Upload concluído:', { publicUrl, path });
-
     const payload = {
       id:
         (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
         Math.random().toString(36).slice(2) + Date.now().toString(36),
-      conversation_id: conversationId,
-      sender_type: senderType,
-      message_type: 'image' as const,
+      conversationId,
+      senderType,
+      messageType: 'image' as const,
       text: '',
       imageUrl: publicUrl,
       storagePath: path,
       client_token: clientToken,
-      created_at: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
     };
 
     upsertMessage(payload as any);
@@ -450,38 +336,33 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data, error } = await client.from('messages').insert(payload as any).select('*').single();
 
     if (error) {
-      console.error('❌ [sendImageMessage] ERRO:', error);
+      console.error('[sendImageMessage] insert error', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
       return;
     }
 
-    console.log('✅ [sendImageMessage] Sucesso:', data);
     if (data) upsertMessage(data as Message);
   };
 
   const claimConversation = async (conversationId: string) => {
     const claimedBy = currentUser?.name || 'Atendente';
 
-    console.log('✋ [claimConversation] Assumindo:', conversationId);
-
     const { data, error } = await supabaseSupport
       .from('conversations')
-      .update({ status: 'claimed', claimed_by: claimedBy })
+      .update({ status: 'claimed', claimedBy })
       .eq('id', conversationId)
       .select('*')
       .single();
 
-    if (error) {
-      console.error('❌ [claimConversation] ERRO:', error);
-      throw error;
-    }
-
-    console.log('✅ [claimConversation] Sucesso:', data);
+    if (error) throw error;
     upsertConversation(data as Conversation);
   };
 
   const closeConversation = async (conversationId: string) => {
-    console.log('🔒 [closeConversation] Fechando:', conversationId);
-
     const { data, error } = await supabaseSupport
       .from('conversations')
       .update({ status: 'closed' })
@@ -489,26 +370,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .select('*')
       .single();
 
-    if (error) {
-      console.error('❌ [closeConversation] ERRO:', error);
-      throw error;
-    }
-
-    console.log('✅ [closeConversation] Sucesso:', data);
+    if (error) throw error;
     upsertConversation(data as Conversation);
   };
 
-  const getConversation = (id: string) => {
-    const conv = conversations.find((c) => c.id === id);
-    console.log('🔍 [getConversation]', id, '→', conv ? 'ENCONTRADA' : 'NÃO ENCONTRADA');
-    return conv;
-  };
+  const getConversation = (id: string) => conversations.find((c) => c.id === id);
 
-  const getMessages = (conversationId: string) => {
-    const msgs = messages.filter((m) => m.conversation_id === conversationId);
-    console.log('🔍 [getMessages]', conversationId, '→', msgs.length, 'mensagens');
-    return msgs;
-  };
+  const getMessages = (conversationId: string) =>
+    messages.filter((m) => m.conversationId === conversationId);
 
   return (
     <ChatContext.Provider

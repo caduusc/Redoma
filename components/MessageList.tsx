@@ -45,7 +45,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, currentType, conver
     }
   }, [messages.length]);
 
-  const lastOwnMsgId = [...messages].reverse().find((m) => m.sender_type === currentType)?.id;
+  const lastOwnMsgId = [...messages].reverse().find((m) => m.senderType === currentType)?.id;
 
   const otherSeenAt =
     currentType === 'agent' ? conversation?.last_client_seen_at : conversation?.last_agent_seen_at;
@@ -63,14 +63,14 @@ const MessageList: React.FC<MessageListProps> = ({ messages, currentType, conver
         </div>
       ) : (
         messages.map((msg) => {
-          const isOwn = msg.sender_type === currentType;
+          const isOwn = msg.senderType === currentType;
           const isLastOwn = isOwn && msg.id === lastOwnMsgId;
-          const isImage = msg.message_type === 'image';
+          const isImage = msg.messageType === 'image';
           const textContent = msg.text || '';
 
           const wasSeen =
             !!(isLastOwn && otherSeenAt) &&
-            new Date(otherSeenAt).getTime() >= new Date(msg.created_at).getTime();
+            new Date(otherSeenAt).getTime() >= new Date(msg.createdAt).getTime();
 
           return (
             <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
@@ -107,7 +107,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, currentType, conver
                       isOwn ? 'text-white/60' : 'text-slate-400'
                     }`}
                   >
-                    {new Date(msg.created_at).toLocaleTimeString([], {
+                    {new Date(msg.createdAt).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
