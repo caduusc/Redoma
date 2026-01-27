@@ -1,3 +1,5 @@
+// types.ts
+
 export type ConversationStatus = 'open' | 'claimed' | 'closed';
 
 export interface Conversation {
@@ -79,9 +81,21 @@ export interface Provider {
   updatedAt: string;
 }
 
+/**
+ * ✅ Atualizado para refletir as novas colunas adicionadas no Supabase:
+ * - slug
+ * - description
+ * - logo_url
+ */
 export interface Community {
   id: string;
   name: string;
+
+  // novas colunas
+  slug?: string | null;
+  description?: string | null;
+  logo_url?: string | null;
+
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

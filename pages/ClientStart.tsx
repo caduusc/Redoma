@@ -307,23 +307,41 @@ const ClientStart: React.FC = () => {
 
   /* ========= HELPERS PARA CRIAR / REUTILIZAR CONVERSA ========= */
 
-  const startConversationForCommunity = async (communityId: string) => {
+  const startConversationForCommunity = async (communityIdOrSlug: string) => {
     setSubmittingConversation(true);
     setCommunityError(null);
 
     try {
-      const normalizedId = communityId.trim().toLowerCase();
+      const normalizedInput = communityIdOrSlug.trim().toLowerCase();
       const rawName = fullName.trim();
       const phoneNorm = normalizePhone(phone);
 
-      if (!normalizedId || !rawName || !phoneNorm) {
+      if (!normalizedInput || !rawName || !phoneNorm) {
         setCommunityError('Informe o ID da comunidade, seu nome e celular.');
         return;
       }
 
+      // 1) Resolve: aceita id OU slug e converte para o ID real
+      const { data: comm, error: commErr } = await supabasePublic
+        .from('communities')
+        .select('id, slug')
+        .or(`id.eq.${normalizedInput},slug.eq.${normalizedInput}`)
+        .maybeSingle();
+
+      if (commErr) throw commErr;
+
+      if (!comm?.id) {
+        setCommunityError(
+          'O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato no WhatsApp 11 95825-8734'
+        );
+        return;
+      }
+
+      const resolvedCommunityId = comm.id;
+
       // Se já existir conversa ATIVA (24h) dessa comunidade, reutiliza
       const existingActive = activeConversations.find(
-        (c) => c.communityId === normalizedId
+        (c) => c.communityId === resolvedCommunityId
       );
       if (existingActive) {
         // limpa o badge localmente
@@ -333,24 +351,8 @@ const ClientStart: React.FC = () => {
         }));
 
         setActiveConversationId(existingActive.id);
-        localStorage.setItem('redoma_client_cid', normalizedId);
+        localStorage.setItem('redoma_client_cid', resolvedCommunityId);
         navigate('/client/chat');
-        return;
-      }
-
-      // 1) Valida se a comunidade existe
-      const { data, error: sbError } = await supabasePublic
-        .from('communities')
-        .select('id')
-        .eq('id', normalizedId)
-        .maybeSingle();
-
-      if (sbError) throw sbError;
-
-      if (!data) {
-        setCommunityError(
-          'O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato no WhatsApp 11 95825-8734'
-        );
         return;
       }
 
@@ -361,7 +363,7 @@ const ClientStart: React.FC = () => {
         .from('members')
         .upsert(
           {
-            community_id: normalizedId,
+            community_id: resolvedCommunityId,
             full_name: rawName,
             full_name_normalized: normalizedFullName,
             phone: phoneNorm,
@@ -388,11 +390,11 @@ const ClientStart: React.FC = () => {
       };
       localStorage.setItem('redoma_member_session', JSON.stringify(session));
 
-      // 4) Mantém compatibilidade com o resto do app
-      localStorage.setItem('redoma_client_cid', normalizedId);
+      // 4) Mantém compatibilidade com o resto do app (sempre ID real)
+      localStorage.setItem('redoma_client_cid', resolvedCommunityId);
 
       // 5) Cria conversa nova
-      await createConversation(normalizedId);
+      await createConversation(resolvedCommunityId);
       navigate('/client/chat');
     } catch (err) {
       console.error('Erro ao iniciar conversa:', err);
