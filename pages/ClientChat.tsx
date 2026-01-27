@@ -9,17 +9,35 @@ import { LayoutGrid } from 'lucide-react';
 
 const ClientChat: React.FC = () => {
   const navigate = useNavigate();
+  
+  // ✅ CORREÇÃO: Usar as propriedades corretas do contexto
   const {
-    conversation,
-    messages,
-    sendMessage,
-    sendImage,
-    hasUnreadFromAgent,
+    getConversation,
+    getMessages,
+    addMessage,
+    sendImageMessage,
     setActiveConversationId,
   } = useChat();
 
   const [communityName, setCommunityName] = useState<string | null>(null);
   const [loadingTitle, setLoadingTitle] = useState<boolean>(true);
+
+  // ✅ CORREÇÃO: Pegar o ID da conversa ativa do localStorage
+  const activeConvId = localStorage.getItem('redoma_active_conv');
+  
+  // ✅ CORREÇÃO: Buscar a conversa usando a função do contexto
+  const conversation = activeConvId ? getConversation(activeConvId) : undefined;
+  
+  // ✅ CORREÇÃO: Buscar as mensagens usando a função do contexto
+  const messages = activeConvId ? getMessages(activeConvId) : [];
+
+  // ✅ CORREÇÃO: Calcular se há mensagens não lidas do agente
+  const hasUnreadFromAgent = useMemo(() => {
+    if (!messages.length) return false;
+    // Verifica se a última mensagem é do agente
+    const lastMsg = messages[messages.length - 1];
+    return lastMsg?.senderType === 'agent';
+  }, [messages]);
 
   // ✅ fallback: tenta pegar o communityId do localStorage (setado no ClientStart)
   const communityIdForTitle = useMemo(() => {
@@ -75,14 +93,16 @@ const ClientChat: React.FC = () => {
     return 'Chat';
   }, [communityName, loadingTitle, communityIdForTitle]);
 
+  // ✅ CORREÇÃO: handleSend agora usa addMessage com conversationId e senderType corretos
   const handleSend = async (text: string) => {
     if (!conversation?.id) return;
-    await sendMessage(text);
+    await addMessage(conversation.id, text, 'client');
   };
 
+  // ✅ CORREÇÃO: handleSendImage agora usa sendImageMessage com conversationId e senderType corretos
   const handleSendImage = async (file: File) => {
     if (!conversation?.id) return;
-    await sendImage(file);
+    await sendImageMessage(conversation.id, file, 'client');
   };
 
   const handleBack = () => {
