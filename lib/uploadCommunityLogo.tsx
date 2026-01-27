@@ -1,32 +1,40 @@
-import { supabaseMaster } from './supabase';
+import { supabasePublic } from './supabase';
 
-interface UploadCommunityLogoParams {
-  file: File;
-  communityId?: string | null;
-}
+export async function uploadCommunityLogo(
+  file: File,
+  communityId: string
+) {
+  // gera nome único do arquivo
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+  const fileName = `community-${communityId}-${Date.now()}.${ext}`;
+  const filePath = `communities/${fileName}`;
 
-export async function uploadCommunityLogo({
-  file,
-  communityId,
-}: UploadCommunityLogoParams): Promise<{ publicUrl: string }> {
-  const bucket = 'community-logos';
-
-  const ext = file.name.split('.').pop() || 'png';
-  const fileName = `${communityId || 'new'}-${Date.now()}.${ext}`;
-  const filePath = `logos/${fileName}`;
-
-  const { error: uploadError } = await supabaseMaster.storage
-    .from(bucket)
-    .upload(filePath, file, { cacheControl: '3600', upsert: true });
-
-  if (uploadError) {
-    console.error('[uploadCommunityLogo] erro no upload', uploadError);
-    throw uploadError;
+  // valida se é imagem
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Envie apenas imagens.');
   }
 
-  const {
-    data: { publicUrl },
-  } = supabaseMaster.storage.from(bucket).getPublicUrl(filePath);
+  // upload pro bucket
+  const { error } = await supabasePublic.storage
+    .from('community-logos')
+    .upload(filePath, file, {
+      upsert: true,
+      contentType: file.type,
+    });
 
-  return { publicUrl };
+  if (error) {
+    console.error('Erro no upload:', error);
+    throw error;
+  }
+
+  // pega URL pública
+  const { data } = supabasePublic.storage
+    .from('community-logos')
+    .getPublicUrl(filePath);
+
+  if (!data?.publicUrl) {
+    throw new Error('Não foi possível gerar URL pública.');
+  }
+
+  return data.publicUrl;
 }

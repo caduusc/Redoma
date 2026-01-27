@@ -3,7 +3,7 @@ import AdminLayout from '../components/AdminLayout';
 import { Community } from '../types';
 import { useCommunities } from '../context/CommunityContext';
 import { uploadCommunityLogo } from '../lib/uploadCommunityLogo';
-import { Plus, Edit2, Trash2, Power, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Power, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
 type CommunityFormData = {
   name: string;
@@ -14,7 +14,8 @@ type CommunityFormData = {
 };
 
 const AdminCommunities: React.FC = () => {
-  const { communities, addCommunity, updateCommunity, deleteCommunity, toggleActive } = useCommunities();
+  const { communities, addCommunity, updateCommunity, deleteCommunity, toggleActive } =
+    useCommunities();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCommunity, setEditingCommunity] = useState<Community | null>(null);
@@ -29,6 +30,7 @@ const AdminCommunities: React.FC = () => {
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const communitiesSorted = [...communities].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -66,43 +68,83 @@ const AdminCommunities: React.FC = () => {
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Envie apenas imagens.');
+      return;
+    }
+
     setLogoFile(file);
     setLogoPreview(URL.createObjectURL(file));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
 
     try {
-      let finalLogoUrl: string | null = formData.logo_url ?? null;
+      setSaving(true);
 
-      if (logoFile) {
-        const { publicUrl } = await uploadCommunityLogo({
-          file: logoFile,
-          communityId: editingCommunity?.id,
-        });
-        finalLogoUrl = publicUrl;
-      }
+      const name = formData.name.trim();
+      const slug = formData.slug.trim().toLowerCase();
 
-      const payload: CommunityFormData = {
-        ...formData,
-        slug: formData.slug.trim().toLowerCase(),
-        logo_url: finalLogoUrl,
-      };
-
-      if (!payload.name.trim()) {
+      if (!name) {
         alert('Informe o nome.');
         return;
       }
-      if (!payload.slug.trim()) {
+      if (!slug) {
         alert('Informe o slug (ex: unidos-somos-fortes).');
         return;
       }
 
-      if (editingCommunity) {
-        await updateCommunity(editingCommunity.id, payload as any);
+      // IMPORTANTE:
+      // - Para subir logo no create, precisamos de um id.
+      // - Então: primeiro cria/atualiza, depois (se tiver arquivo) faz upload e atualiza logo_url.
+      if (!editingCommunity) {
+        // CREATE primeiro
+        const created = await addCommunity({
+          ...formData,
+          name,
+          slug,
+          logo_url: null,
+        } as any);
+
+        // Se seu addCommunity NÃO retorna a comunidade criada, ajuste seu context para retornar.
+        // Fallback: tenta pegar pelo slug na lista depois.
+        const createdId =
+          (created as any)?.id ||
+          communities.find((c) => (c.slug || '').toLowerCase() === slug)?.id ||
+          null;
+
+        if (logoFile && createdId) {
+          const publicUrl = await uploadCommunityLogo(logoFile, createdId);
+
+          await updateCommunity(createdId, {
+            ...formData,
+            name,
+            slug,
+            logo_url: publicUrl,
+          } as any);
+        } else if (logoFile && !createdId) {
+          alert(
+            'Comunidade criada, mas não consegui recuperar o ID para subir a logo. Reabra e edite para enviar a logo.'
+          );
+        }
       } else {
-        await addCommunity(payload as any);
+        // UPDATE (se tiver logo, faz upload usando o id existente)
+        let finalLogoUrl: string | null = formData.logo_url ?? null;
+
+        if (logoFile) {
+          const publicUrl = await uploadCommunityLogo(logoFile, editingCommunity.id);
+          finalLogoUrl = publicUrl;
+        }
+
+        await updateCommunity(editingCommunity.id, {
+          ...formData,
+          name,
+          slug,
+          logo_url: finalLogoUrl,
+        } as any);
       }
 
       setIsModalOpen(false);
@@ -110,6 +152,8 @@ const AdminCommunities: React.FC = () => {
     } catch (err) {
       console.error('[AdminCommunities handleSubmit] erro ao salvar comunidade', err);
       alert('Erro ao salvar comunidade (logo ou dados). Veja o console.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -151,7 +195,7 @@ const AdminCommunities: React.FC = () => {
 
                   <div>
                     <p className="font-bold text-slate-800 text-sm leading-tight">{c.name}</p>
-                    <p className="text-[11px] text-slate-400">{c.slug || 'sem-slug'}</p>
+                    <p className="text-[11px] text-slate-400">{c.slug || '-'}</p>
                   </div>
                 </div>
 
@@ -213,10 +257,18 @@ const AdminCommunities: React.FC = () => {
           <table className="w-full min-w-[760px] text-left">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nome</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Slug</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Ações</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Nome
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Slug
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Status
+                </th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -311,13 +363,17 @@ const AdminCommunities: React.FC = () => {
               <h3 className="text-lg font-extrabold text-slate-800">
                 {editingCommunity ? 'Editar Comunidade' : 'Nova Comunidade'}
               </h3>
-              <p className="text-xs text-slate-400 mt-1">Cadastre nome, slug e (opcional) logo/descrição.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Cadastre nome, slug e (opcional) logo/descrição.
+              </p>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nome</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Nome
+                  </label>
                   <input
                     value={formData.name}
                     onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
@@ -327,7 +383,9 @@ const AdminCommunities: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Slug</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Slug
+                  </label>
                   <input
                     value={formData.slug}
                     onChange={(e) => setFormData((p) => ({ ...p, slug: e.target.value }))}
@@ -338,7 +396,9 @@ const AdminCommunities: React.FC = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Descrição (opcional)</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Descrição (opcional)
+                </label>
                 <textarea
                   value={formData.description ?? ''}
                   onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
@@ -349,8 +409,15 @@ const AdminCommunities: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Logo (opcional)</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Logo (opcional)
+                  </label>
                   <input type="file" accept="image/*" onChange={handleLogoChange} />
+                  {!editingCommunity && logoFile ? (
+                    <p className="text-[10px] text-slate-400 mt-2">
+                      A logo será enviada após salvar a comunidade (precisamos do ID).
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -380,20 +447,29 @@ const AdminCommunities: React.FC = () => {
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
+                  disabled={saving}
                   onClick={() => {
                     setIsModalOpen(false);
                     resetForm();
                   }}
-                  className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs uppercase tracking-widest"
+                  className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs uppercase tracking-widest disabled:opacity-70"
                 >
                   Cancelar
                 </button>
 
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 rounded-2xl bg-redoma-dark text-white font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all"
+                  disabled={saving}
+                  className="flex-1 px-4 py-3 rounded-2xl bg-redoma-dark text-white font-bold text-xs uppercase tracking-widest hover:bg-slate-800 transition-all disabled:opacity-70 flex items-center justify-center gap-2"
                 >
-                  Salvar
+                  {saving ? (
+                    <>
+                      <Loader2 className="animate-spin" size={16} />
+                      Salvando...
+                    </>
+                  ) : (
+                    'Salvar'
+                  )}
                 </button>
               </div>
             </form>
