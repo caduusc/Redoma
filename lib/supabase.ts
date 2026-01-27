@@ -5,12 +5,18 @@ const supabaseAnonKey = 'sb_publishable_9tyk3EMUSLUy3VkK9yypaQ_NWRYPmUl';
 
 const CLIENT_TOKEN_KEY = 'redoma_client_token';
 
-// fetch wrapper: injeta x-client-token em TODAS as requests do supabasePublic
+/**
+ * Fetch wrapper
+ * Injeta automaticamente o header `x-client-token`
+ * em TODAS as requests feitas pelo supabasePublic
+ */
 const withClientTokenFetch: typeof fetch = async (input, init) => {
   const headers = new Headers(init?.headers || {});
   const token = localStorage.getItem(CLIENT_TOKEN_KEY);
 
-  if (token) headers.set('x-client-token', token);
+  if (token) {
+    headers.set('x-client-token', token);
+  }
 
   return fetch(input, {
     ...init,
@@ -18,7 +24,12 @@ const withClientTokenFetch: typeof fetch = async (input, init) => {
   });
 };
 
-// 1) Público (cliente) — NÃO persistir sessão pra não sujar login do suporte/master
+/**
+ * 1) Público (CLIENTE)
+ * - Não persiste sessão
+ * - Não interfere no login do suporte/admin
+ * - Sempre envia x-client-token → RLS funciona
+ */
 export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: false,
@@ -30,7 +41,11 @@ export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// 2) Suporte — persiste sessão em uma chave própria
+/**
+ * 2) SUPORTE
+ * - Sessão própria
+ * - Não usa token customizado
+ */
 export const supabaseSupport = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -40,7 +55,10 @@ export const supabaseSupport = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-// 3) Master — persiste sessão em outra chave própria
+/**
+ * 3) MASTER / ADMIN
+ * - Sessão própria e isolada
+ */
 export const supabaseMaster = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
