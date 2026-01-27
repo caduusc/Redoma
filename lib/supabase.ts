@@ -3,8 +3,20 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = 'https://wjpkvdkmkoojjmnjdtnk.supabase.co';
 const supabaseAnonKey = 'sb_publishable_9tyk3EMUSLUy3VkK9yypaQ_NWRYPmUl';
 
-// helper: pega o token do client (RLS usa header x-client-token)
-const getClientToken = () => localStorage.getItem('redoma_client_token') || '';
+const CLIENT_TOKEN_KEY = 'redoma_client_token';
+
+// fetch wrapper: injeta x-client-token em TODAS as requests do supabasePublic
+const withClientTokenFetch: typeof fetch = async (input, init) => {
+  const headers = new Headers(init?.headers || {});
+  const token = localStorage.getItem(CLIENT_TOKEN_KEY);
+
+  if (token) headers.set('x-client-token', token);
+
+  return fetch(input, {
+    ...init,
+    headers,
+  });
+};
 
 // 1) Público (cliente) — NÃO persistir sessão pra não sujar login do suporte/master
 export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
@@ -14,9 +26,7 @@ export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
   },
   global: {
-    headers: {
-      'x-client-token': getClientToken(),
-    },
+    fetch: withClientTokenFetch,
   },
 });
 
