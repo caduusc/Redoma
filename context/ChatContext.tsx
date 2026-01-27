@@ -43,14 +43,15 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
+const genId = () =>
+  crypto?.randomUUID?.() ??
+  Math.random().toString(36).slice(2) + Date.now().toString(36);
+
 const getOrCreateClientToken = () => {
   const existing = localStorage.getItem('redoma_client_token');
   if (existing) return existing;
 
-  const token =
-    crypto?.randomUUID?.() ??
-    (Math.random().toString(36).slice(2) + Date.now().toString(36));
-
+  const token = genId();
   localStorage.setItem('redoma_client_token', token);
   return token;
 };
@@ -74,16 +75,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const upsertConversation = useCallback((conv: Conversation) => {
     setConversations((prev) => {
       const exists = prev.find((c) => c.id === conv.id);
-      if (!exists) return [...prev, conv];
+      if (!exists) return [conv, ...prev];
       return prev.map((c) => (c.id === conv.id ? conv : c));
     });
   }, []);
 
+  // ✅ IMPORTANTE: permite atualizar mensagem "optimistic" quando o DB responder
+  // - Se já existir por id, substitui/mescla
+  // - Se não existir, insere
   const upsertMessage = useCallback((msg: Message) => {
     setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev;
-      return [...prev, msg];
+      const idx = prev.findIndex((m) => m.id === msg.id);
+      if (idx === -1) return [...prev, msg];
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...msg };
+      return next;
     });
+  }, []);
+
+  // ✅ também útil: remover uma mensagem (rollback) se insert falhar
+  const removeMessageById = useCallback((id: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== id));
   }, []);
 
   const setActiveConversationId = useCallback((id: string | null) => {
@@ -222,9 +234,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const createConversation = async (communityId: string) => {
     const clientToken = getOrCreateClientToken();
-    const id =
-      crypto?.randomUUID?.() ??
-      (Math.random().toString(36).slice(2) + Date.now().toString(36));
+    const id = genId();
 
     // 🔹 Recupera memberId salvo na sessão (nome + comunidade)
     let memberId: string | null = null;
@@ -232,29 +242,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (rawSession) {
       try {
         const parsed = JSON.parse(rawSession) as { memberId?: string; communityId?: string };
-        if (parsed?.memberId) {
-          memberId = parsed.memberId;
-        }
+        if (parsed?.memberId) memberId = parsed.memberId;
       } catch {
-        // se der erro de parse, ignora e segue sem memberId
+        // ignore
       }
     }
 
-    const conv = {
+    const conv: any = {
       id,
       communityId,
       status: 'open' as const,
       claimedBy: null,
       createdAt: new Date().toISOString(),
-      // 👇 garante preenchimento das duas colunas
+
+      // compat: alguns lugares usam snake_case
       client_token: clientToken,
       clientToken: clientToken,
+
       memberId: memberId ?? null,
     };
 
-    await supabasePublic.from('conversations').insert(conv);
+    const { error } = await supabasePublic.from('conversations').insert(conv);
+    if (error) {
+      console.error('[createConversation] insert error', error);
+      throw error;
+    }
+
     setActiveConversationId(id);
-    upsertConversation(conv as any);
+    upsertConversation(conv as Conversation);
     return id;
   };
 
@@ -264,11 +279,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     senderType: SenderType
   ) => {
     const clientToken = getOrCreateClientToken();
+    const id = genId();
 
-    const basePayload = {
-      id:
-        crypto?.randomUUID?.() ??
-        (Math.random().toString(36).slice(2) + Date.now().toString(36)),
+    const basePayload: any = {
+      id,
       conversationId,
       senderType,
       messageType: 'text' as const,
@@ -278,18 +292,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const optimisticMsg: Message = {
-      ...basePayload,
+      ...(basePayload as any),
       createdAt: new Date().toISOString(), // só pra UI local
     };
 
-    console.log('[addMessage] called', { conversationId, text, senderType, basePayload });
-
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
 
-    // plota localmente pro cliente (optimistic)
-    if (senderType === 'client') {
-      upsertMessage(optimisticMsg);
-    }
+    // ✅ optimistic sempre (cliente e agente), pra não ficar "sumindo"
+    upsertMessage(optimisticMsg);
 
     try {
       const { data, error } = await client
@@ -300,15 +310,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('[addMessage] insert error', error);
+        // rollback só se quiser (mantém pra debug ou remove pra UX)
+        removeMessageById(id);
         return;
       }
 
       if (data) {
-        // sobrescreve com a versão do banco (createdAt real)
+        // substitui/mescla a versão do banco (createdAt real etc)
         upsertMessage(data as Message);
       }
     } catch (err) {
       console.error('[addMessage] fatal', err);
+      removeMessageById(id);
     }
   };
 
@@ -318,47 +331,49 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     senderType: SenderType
   ) => {
     const clientToken = getOrCreateClientToken();
+    const id = genId();
 
-    console.log('[sendImageMessage REAL] file:', {
+    console.log('[sendImageMessage] file:', {
       name: file.name,
       size: file.size,
       type: file.type,
     });
 
-    const { publicUrl, path } = await uploadChatImage({
-      file,
-      conversationId,
-      senderType,
-    });
-
-    console.log('[sendImageMessage REAL] upload ok:', { publicUrl, path });
-
-    const basePayload = {
-      id:
-        crypto?.randomUUID?.() ??
-        (Math.random().toString(36).slice(2) + Date.now().toString(36)),
-      conversationId,
-      senderType,
-      messageType: 'image' as const,
-      text: '',
-      imageUrl: publicUrl,
-      storagePath: path,
-      clientToken,
-      // 👈 sem createdAt: Postgres preenche
-    };
-
+    // ✅ optimistic placeholder (imagem carregando)
     const optimisticMsg: Message = {
-      ...basePayload,
-      createdAt: new Date().toISOString(), // só pra UI local
-    };
+      id,
+      conversationId,
+      senderType,
+      messageType: 'image' as any,
+      text: '',
+      imageUrl: '', // placeholder
+      storagePath: '',
+      clientToken,
+      createdAt: new Date().toISOString(),
+    } as any;
 
-    const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
-
-    if (senderType === 'client') {
-      upsertMessage(optimisticMsg);
-    }
+    upsertMessage(optimisticMsg);
 
     try {
+      const { publicUrl, path } = await uploadChatImage({
+        file,
+        conversationId,
+        senderType,
+      });
+
+      const basePayload: any = {
+        id,
+        conversationId,
+        senderType,
+        messageType: 'image' as const,
+        text: '',
+        imageUrl: publicUrl,
+        storagePath: path,
+        clientToken,
+      };
+
+      const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
+
       const { data, error } = await client
         .from('messages')
         .insert(basePayload)
@@ -366,17 +381,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error) {
-        console.error('[sendImageMessage REAL] insert error', error);
+        console.error('[sendImageMessage] insert error', error);
+        removeMessageById(id);
         return;
       }
 
-      if (data) {
-        upsertMessage(data as Message);
-      }
-
-      console.log('[sendImageMessage REAL] mensagem de imagem inserida com sucesso');
+      if (data) upsertMessage(data as Message);
     } catch (err) {
-      console.error('[sendImageMessage REAL] fatal', err);
+      console.error('[sendImageMessage] fatal', err);
+      removeMessageById(id);
     }
   };
 
@@ -391,7 +404,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .single();
 
     if (error) throw error;
-
     upsertConversation(data as Conversation);
   };
 
@@ -409,9 +421,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const getConversation = (id: string) => conversations.find((c) => c.id === id);
 
-  // 👇 agora NÃO ordena mais, só mantém a ordem em que as mensagens chegaram no estado
+  // ✅ mantém ordenação estável (createdAt), mas não quebra optimistic
   const getMessages = (conversationId: string) =>
-    messages.filter((m) => m.conversationId === conversationId);
+    messages
+      .filter((m) => m.conversationId === conversationId)
+      .slice()
+      .sort((a: any, b: any) => {
+        const ta = new Date(a.createdAt || 0).getTime();
+        const tb = new Date(b.createdAt || 0).getTime();
+        return ta - tb;
+      });
 
   return (
     <ChatContext.Provider
