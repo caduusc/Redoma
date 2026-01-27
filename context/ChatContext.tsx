@@ -1,10 +1,10 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
-  useCallback,
 } from 'react';
 import { Conversation, Message, User, SenderType } from '../types';
 import { supabasePublic, supabaseSupport } from '../lib/supabase';
@@ -20,17 +20,9 @@ interface ChatContextType {
 
   createConversation: (communityId: string) => Promise<string>;
 
-  addMessage: (
-    conversationId: string,
-    text: string,
-    senderType: SenderType
-  ) => Promise<void>;
+  addMessage: (conversationId: string, text: string, senderType: SenderType) => Promise<void>;
 
-  sendImageMessage: (
-    conversationId: string,
-    file: File,
-    senderType: SenderType
-  ) => Promise<void>;
+  sendImageMessage: (conversationId: string, file: File, senderType: SenderType) => Promise<void>;
 
   claimConversation: (conversationId: string) => Promise<void>;
   closeConversation: (conversationId: string) => Promise<void>;
@@ -48,43 +40,12 @@ const getOrCreateClientToken = () => {
   if (existing) return existing;
 
   const token =
-    crypto?.randomUUID?.() ??
+    (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
     Math.random().toString(36).slice(2) + Date.now().toString(36);
 
   localStorage.setItem('redoma_client_token', token);
   return token;
 };
-
-/** Normaliza conversa vindo do banco (suporta snake_case sem quebrar camelCase) */
-const normalizeConversation = (row: any): Conversation => ({
-  id: row.id,
-  communityId: row.communityId ?? row.community_id ?? '',
-  status: row.status,
-  claimedBy: row.claimedBy ?? row.claimed_by ?? null,
-  createdAt: row.createdAt ?? row.created_at ?? row.createdAt ?? new Date().toISOString(),
-
-  memberId: row.memberId ?? row.member_id ?? null,
-  memberName: row.memberName ?? row.member_name ?? null,
-
-  last_client_seen_at: row.last_client_seen_at ?? null,
-  last_agent_seen_at: row.last_agent_seen_at ?? null,
-
-  clientToken: row.clientToken ?? row.client_token ?? null,
-});
-
-/** Normaliza mensagem vindo do banco (corrigido: sem typos) */
-const normalizeMessage = (row: any): Message => ({
-  id: row.id,
-  conversationId: row.conversationId ?? row.conversation_id ?? '',
-  senderType: row.senderType ?? row.sender_type,
-  messageType: row.messageType ?? row.message_type,
-  text: row.text ?? '',
-  imageUrl: row.imageUrl ?? row.image_url ?? null,
-  imageThumbUrl: row.imageThumbUrl ?? row.image_thumb_url ?? null,
-  storagePath: row.storagePath ?? row.storage_path ?? null,
-  createdAt: row.createdAt ?? row.created_at ?? new Date().toISOString(),
-  clientToken: row.clientToken ?? row.client_token ?? null,
-});
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -104,7 +65,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const upsertConversation = useCallback((conv: Conversation) => {
     setConversations((prev) => {
-      const exists = prev.find((c) => c.id === conv.id);
+      const exists = prev.some((c) => c.id === conv.id);
       if (!exists) return [...prev, conv];
       return prev.map((c) => (c.id === conv.id ? conv : c));
     });
@@ -141,7 +102,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select('*');
 
         if (convErr) console.error('[support fetch conversations]', convErr);
-        if (convs) setConversations((convs as any[]).map(normalizeConversation));
+        setConversations((convs || []) as Conversation[]);
 
         const { data: msgs, error: msgErr } = await supabaseSupport
           .from('messages')
@@ -149,14 +110,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .order('createdAt', { ascending: true });
 
         if (msgErr) console.error('[support fetch messages]', msgErr);
-        if (msgs) setMessages((msgs as any[]).map(normalizeMessage));
+        setMessages((msgs || []) as Message[]);
 
         convChannel = supabaseSupport
           .channel('support_convs')
           .on(
             'postgres_changes' as any,
             { event: '*', schema: 'public', table: 'conversations' },
-            (p: any) => upsertConversation(normalizeConversation(p.new))
+            (p: any) => {
+              if (p?.new) upsertConversation(p.new as Conversation);
+            }
           )
           .subscribe();
 
@@ -165,7 +128,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .on(
             'postgres_changes' as any,
             { event: 'INSERT', schema: 'public', table: 'messages' },
-            (p: any) => upsertMessage(normalizeMessage(p.new))
+            (p: any) => {
+              if (p?.new) upsertMessage(p.new as Message);
+            }
           )
           .subscribe();
 
@@ -175,57 +140,63 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // ============ MODO CLIENTE ============
       console.log('[ChatProvider boot] modo CLIENTE, activeConvId =', activeConvId);
 
-      if (activeConvId) {
-        const { data: conv, error: convErr } = await supabasePublic
-          .from('conversations')
-          .select('*')
-          .eq('id', activeConvId)
-          .maybeSingle();
-
-        if (convErr) console.error('[client fetch active conversation]', convErr);
-        if (conv) setConversations([normalizeConversation(conv)]);
-
-        const { data: msgs, error: msgErr } = await supabasePublic
-          .from('messages')
-          .select('*')
-          .eq('conversationId', activeConvId)
-          .order('createdAt', { ascending: true });
-
-        if (msgErr) console.error('[client fetch active messages]', msgErr);
-        if (msgs) setMessages((msgs as any[]).map(normalizeMessage));
-
-        // realtime para o cliente
-        convChannel = supabasePublic
-          .channel(`client_conversations_${activeConvId}`)
-          .on(
-            'postgres_changes' as any,
-            {
-              event: '*',
-              schema: 'public',
-              table: 'conversations',
-              filter: `id=eq.${activeConvId}`,
-            },
-            (p: any) => upsertConversation(normalizeConversation(p.new))
-          )
-          .subscribe();
-
-        msgChannel = supabasePublic
-          .channel(`client_messages_${activeConvId}`)
-          .on(
-            'postgres_changes' as any,
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'messages',
-              filter: `conversationId=eq.${activeConvId}`,
-            },
-            (p: any) => upsertMessage(normalizeMessage(p.new))
-          )
-          .subscribe();
-      } else {
+      if (!activeConvId) {
         setConversations([]);
         setMessages([]);
+        return;
       }
+
+      const { data: conv, error: convErr } = await supabasePublic
+        .from('conversations')
+        .select('*')
+        .eq('id', activeConvId)
+        .maybeSingle();
+
+      if (convErr) console.error('[client fetch active conversation]', convErr);
+      setConversations(conv ? ([conv] as Conversation[]) : []);
+
+      const { data: msgs, error: msgErr } = await supabasePublic
+        .from('messages')
+        .select('*')
+        .eq('conversationId', activeConvId)
+        .order('createdAt', { ascending: true });
+
+      if (msgErr) console.error('[client fetch active messages]', msgErr);
+      setMessages((msgs || []) as Message[]);
+
+      // realtime: conversa
+      convChannel = supabasePublic
+        .channel(`client_conversations_${activeConvId}`)
+        .on(
+          'postgres_changes' as any,
+          {
+            event: '*',
+            schema: 'public',
+            table: 'conversations',
+            filter: `id=eq.${activeConvId}`,
+          },
+          (p: any) => {
+            if (p?.new) upsertConversation(p.new as Conversation);
+          }
+        )
+        .subscribe();
+
+      // realtime: mensagens
+      msgChannel = supabasePublic
+        .channel(`client_messages_${activeConvId}`)
+        .on(
+          'postgres_changes' as any,
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `conversationId=eq.${activeConvId}`,
+          },
+          (p: any) => {
+            if (p?.new) upsertMessage(p.new as Message);
+          }
+        )
+        .subscribe();
     };
 
     boot();
@@ -254,10 +225,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const createConversation = async (communityId: string) => {
     const clientToken = getOrCreateClientToken();
     const id =
-      crypto?.randomUUID?.() ??
+      (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
       Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-    // memberId salvo na sessão
     let memberId: string | null = null;
     const rawSession = localStorage.getItem('redoma_member_session');
     if (rawSession) {
@@ -269,83 +239,59 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // ✅ manda apenas colunas "canônicas" (evita 400 por coluna inexistente)
-    const convInsert = {
+    const conv: Conversation = {
       id,
       communityId,
-      status: 'open' as const,
+      status: 'open' as any,
       claimedBy: null,
       createdAt: new Date().toISOString(),
       clientToken,
       memberId: memberId ?? null,
-    };
+    } as any;
 
-    const { data, error } = await supabasePublic
-      .from('conversations')
-      .insert(convInsert)
-      .select('*')
-      .single();
-
+    const { error } = await supabasePublic.from('conversations').insert(conv as any);
     if (error) {
       console.error('[createConversation] insert error', error);
       throw error;
     }
 
-    const normalized = normalizeConversation(data);
-    upsertConversation(normalized);
-    setActiveConversationId(normalized.id);
-    return normalized.id;
+    setActiveConversationId(id);
+    upsertConversation(conv);
+    return id;
   };
 
-  const addMessage = async (
-    conversationId: string,
-    text: string,
-    senderType: SenderType
-  ) => {
+  const addMessage = async (conversationId: string, text: string, senderType: SenderType) => {
     const clientToken = getOrCreateClientToken();
-    const id =
-      crypto?.randomUUID?.() ??
-      Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-    const insertPayload = {
-      id,
+    const payload = {
+      id:
+        (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
+        Math.random().toString(36).slice(2) + Date.now().toString(36),
       conversationId,
       senderType,
       messageType: 'text' as const,
       text,
       clientToken,
-      // sem createdAt: banco preenche
+      createdAt: new Date().toISOString(), // mantém consistência e ordenação
     };
 
-    const optimisticMsg: Message = {
-      ...insertPayload,
-      createdAt: new Date().toISOString(),
-    };
+    // optimistic para ambos (evita “não aparece”)
+    upsertMessage(payload as any);
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
 
-    // optimistic só pro cliente
-    if (senderType === 'client') upsertMessage(optimisticMsg);
-
-    const { data, error } = await client
-      .from('messages')
-      .insert(insertPayload)
-      .select('*')
-      .single();
+    const { data, error } = await client.from('messages').insert(payload).select('*').single();
 
     if (error) {
       console.error('[addMessage] insert error', error);
-      throw error;
+      // mantém no UI, mas sinaliza no console — se quiser, aqui dá pra marcar como "failed"
+      return;
     }
 
-    if (data) upsertMessage(normalizeMessage(data));
+    if (data) upsertMessage(data as Message);
   };
 
-  const sendImageMessage = async (
-    conversationId: string,
-    file: File,
-    senderType: SenderType
-  ) => {
+  const sendImageMessage = async (conversationId: string, file: File, senderType: SenderType) => {
     const clientToken = getOrCreateClientToken();
 
     const { publicUrl, path } = await uploadChatImage({
@@ -354,12 +300,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       senderType,
     });
 
-    const id =
-      crypto?.randomUUID?.() ??
-      Math.random().toString(36).slice(2) + Date.now().toString(36);
-
-    const insertPayload = {
-      id,
+    const payload = {
+      id:
+        (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
+        Math.random().toString(36).slice(2) + Date.now().toString(36),
       conversationId,
       senderType,
       messageType: 'image' as const,
@@ -367,35 +311,26 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       imageUrl: publicUrl,
       storagePath: path,
       clientToken,
-    };
-
-    const optimisticMsg: Message = {
-      ...insertPayload,
       createdAt: new Date().toISOString(),
     };
 
+    upsertMessage(payload as any);
+
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
 
-    if (senderType === 'client') upsertMessage(optimisticMsg);
-
-    const { data, error } = await client
-      .from('messages')
-      .insert(insertPayload)
-      .select('*')
-      .single();
+    const { data, error } = await client.from('messages').insert(payload).select('*').single();
 
     if (error) {
       console.error('[sendImageMessage] insert error', error);
-      throw error;
+      return;
     }
 
-    if (data) upsertMessage(normalizeMessage(data));
+    if (data) upsertMessage(data as Message);
   };
 
   const claimConversation = async (conversationId: string) => {
     const claimedBy = currentUser?.name || 'Atendente';
 
-    // ✅ atualiza campos canônicos
     const { data, error } = await supabaseSupport
       .from('conversations')
       .update({ status: 'claimed', claimedBy })
@@ -404,7 +339,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .single();
 
     if (error) throw error;
-    upsertConversation(normalizeConversation(data));
+    upsertConversation(data as Conversation);
   };
 
   const closeConversation = async (conversationId: string) => {
@@ -416,7 +351,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .single();
 
     if (error) throw error;
-    upsertConversation(normalizeConversation(data));
+    upsertConversation(data as Conversation);
   };
 
   const getConversation = (id: string) => conversations.find((c) => c.id === id);
