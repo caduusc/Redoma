@@ -45,6 +45,9 @@ const ClientCommunities: React.FC = () => {
     fetchCommunities();
   }, []);
 
+  // ✅ ID público = slug (se existir); fallback = id
+  const getPublicId = (c: CommunityRow) => (c.slug && c.slug.trim() ? c.slug : c.id);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return communities;
@@ -109,75 +112,71 @@ const ClientCommunities: React.FC = () => {
               Carregando comunidades...
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-sm text-slate-400">
-              Nenhuma comunidade encontrada com esse filtro.
-            </p>
+            <p className="text-sm text-slate-400">Nenhuma comunidade encontrada com esse filtro.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {filtered.map((c) => (
-                <div
-                  key={c.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-4 hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition"
-                >
-                  <div className="flex items-center gap-3">
-                    {c.logo_url ? (
-                      <img
-                        src={c.logo_url}
-                        alt={c.name}
-                        className="w-12 h-12 rounded-2xl object-cover border border-slate-100"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 font-bold">
-                        {c.name?.charAt(0) || 'C'}
-                      </div>
-                    )}
+              {filtered.map((c) => {
+                const publicId = getPublicId(c);
 
-                    <div className="min-w-0">
-                      <p className="font-extrabold text-slate-800 text-sm truncate">{c.name}</p>
+                return (
+                  <div
+                    key={c.id}
+                    className="rounded-2xl border border-slate-200 bg-white p-4 hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition"
+                  >
+                    <div className="flex items-center gap-3">
+                      {c.logo_url ? (
+                        <img
+                          src={c.logo_url}
+                          alt={c.name}
+                          className="w-12 h-12 rounded-2xl object-cover border border-slate-100"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 font-bold">
+                          {c.name?.charAt(0) || 'C'}
+                        </div>
+                      )}
 
-                      {/* ✅ só ID (não exibe slug) */}
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-500">
-                          ID: {c.id}
-                        </span>
+                      <div className="min-w-0">
+                        <p className="font-extrabold text-slate-800 text-sm truncate">{c.name}</p>
+
+                        {/* ✅ mostra só o ID público (slug) e NUNCA mostra o slug como campo separado */}
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-500">
+                            ID: {publicId}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {c.description ? (
-                    <p className="text-xs text-slate-500 leading-relaxed mt-3">
-                      {c.description}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-slate-400 leading-relaxed mt-3">
-                      Sem descrição.
-                    </p>
-                  )}
+                    {c.description ? (
+                      <p className="text-xs text-slate-500 leading-relaxed mt-3">{c.description}</p>
+                    ) : (
+                      <p className="text-xs text-slate-400 leading-relaxed mt-3">Sem descrição.</p>
+                    )}
 
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard?.writeText(c.id);
-                      }}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-[10px] uppercase tracking-widest hover:bg-slate-100 transition"
-                    >
-                      Copiar ID
-                    </button>
-                    <p className="text-[10px] text-slate-400 mt-2">
-                      Cole o ID na página inicial para iniciar o atendimento.
-                    </p>
+                    <div className="mt-4">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(publicId);
+                        }}
+                        className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-[10px] uppercase tracking-widest hover:bg-slate-100 transition"
+                      >
+                        Copiar ID
+                      </button>
+                      <p className="text-[10px] text-slate-400 mt-2">
+                        Cole o ID na página inicial para iniciar o atendimento.
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
         <div className="px-10 pb-6 pt-0 flex justify-between items-center border-t border-slate-100">
-          <p className="text-[10px] text-slate-400">
-            Catálogo público (apenas comunidades ativas).
-          </p>
+          <p className="text-[10px] text-slate-400">Catálogo público (apenas comunidades ativas).</p>
 
           <button
             type="button"

@@ -3,7 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { supabasePublic } from '../lib/supabase';
 import Logo from '../components/Logo';
-import { LayoutGrid, AlertCircle, Loader2, MessageCircle, Users } from 'lucide-react';
+import {
+  LayoutGrid,
+  AlertCircle,
+  Loader2,
+  MessageCircle,
+  Users,
+} from 'lucide-react';
 
 const getOrCreateClientToken = () => {
   const existing = localStorage.getItem('redoma_client_token');
@@ -18,16 +24,14 @@ const getOrCreateClientToken = () => {
 const normalizeFullName = (name: string) =>
   name
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[\u0300-\u036f]/g, '')
     .trim()
-    .replace(/\s+/g, ' ') // colapsa espaços
+    .replace(/\s+/g, ' ')
     .toLowerCase();
 
 // normaliza telefone: só dígitos, removendo DDI 55 se vier
 const normalizePhone = (phone: string) =>
-  phone
-    .replace(/\D/g, '') // só dígitos
-    .replace(/^55/, ''); // remove DDI Brasil se vier
+  phone.replace(/\D/g, '').replace(/^55/, '');
 
 type Step = 'IDENTITY' | 'COMMUNITY';
 
@@ -37,6 +41,11 @@ type ConversationRow = {
   status: string | null;
   createdAt: string;
   last_client_seen_at: string | null;
+};
+
+type CommunityNameRow = {
+  id: string;
+  name: string;
 };
 
 const ClientStart: React.FC = () => {
@@ -80,6 +89,13 @@ const ClientStart: React.FC = () => {
   const [activeConversations, setActiveConversations] = useState<ConversationRow[]>([]);
   const [unreadByConvId, setUnreadByConvId] = useState<Record<string, boolean>>({});
 
+  // ✅ Mapa id -> nome (pra exibir nome ao invés do ID)
+  const [communityNameById, setCommunityNameById] = useState<Record<string, string>>({});
+  const [loadingNames, setLoadingNames] = useState(false);
+
+  const getCommunityLabel = (communityId: string) =>
+    communityNameById[communityId] || communityId; // fallback (caso não encontre)
+
   /* ========= STEP 1: IDENTIDADE (nome + celular) ========= */
 
   const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,7 +121,6 @@ const ClientStart: React.FC = () => {
       hasError = true;
     }
 
-    // Brasil: geralmente 10 ou 11 dígitos (DDD + número)
     if (!phoneNorm || phoneNorm.length < 10 || phoneNorm.length > 11) {
       setPhoneError('Informe um celular com DDD válido (apenas números).');
       hasError = true;
@@ -113,7 +128,6 @@ const ClientStart: React.FC = () => {
 
     if (hasError) return;
 
-    // persiste identidade no localStorage
     localStorage.setItem('redoma_full_name', rawName);
     localStorage.setItem('redoma_phone', phoneNorm);
     setPhone(phoneNorm);
@@ -141,7 +155,6 @@ const ClientStart: React.FC = () => {
           return;
         }
 
-        // members por phone_normalized
         const { data: members, error: memErr } = await supabasePublic
           .from('members')
           .select('member_id')
@@ -172,7 +185,6 @@ const ClientStart: React.FC = () => {
           return;
         }
 
-        // conversas desses members
         const { data, error } = await supabasePublic
           .from('conversations')
           .select('id, communityId, status, createdAt, last_client_seen_at')
@@ -190,13 +202,11 @@ const ClientStart: React.FC = () => {
 
         const convs = (data || []) as ConversationRow[];
 
-        // comunidades já usadas (únicas)
         const uniqueCommunities = Array.from(
           new Set(convs.map((c) => c.communityId).filter(Boolean))
         );
         setCommunitiesUsed(uniqueCommunities);
 
-        // conversas ativas nas últimas 24h
         const now = Date.now();
         const twentyFourHoursMs = 24 * 60 * 60 * 1000;
 
@@ -207,18 +217,13 @@ const ClientStart: React.FC = () => {
           return within24h && isOpen;
         });
 
-        // 1 conversa ativa por comunidade (mais recente)
         const byCommunity = new Map<string, ConversationRow>();
         for (const c of active) {
-          if (!byCommunity.has(c.communityId)) {
-            byCommunity.set(c.communityId, c);
-          }
+          if (!byCommunity.has(c.communityId)) byCommunity.set(c.communityId, c);
         }
-
         const dedupedActive = Array.from(byCommunity.values());
         setActiveConversations(dedupedActive);
 
-        // unread (mensagem do agente após last_client_seen_at)
         if (dedupedActive.length === 0) {
           setUnreadByConvId({});
           return;
@@ -262,6 +267,49 @@ const ClientStart: React.FC = () => {
     fetchCommunitiesAndConversations();
   }, [step, phone]);
 
+  /* ========= ✅ BUSCAR NOMES DAS COMUNIDADES (pra não exibir ID) ========= */
+
+  useEffect(() => {
+    const fetchCommunityNames = async () => {
+      if (step !== 'COMMUNITY') return;
+
+      const ids = Array.from(
+        new Set([
+          ...communitiesUsed,
+          ...activeConversations.map((c) => c.communityId),
+        ].filter(Boolean))
+      );
+
+      if (ids.length === 0) {
+        setCommunityNameById({});
+        return;
+      }
+
+      setLoadingNames(true);
+      try {
+        const { data, error } = await supabasePublic
+          .from('communities')
+          .select('id, name')
+          .in('id', ids);
+
+        if (error) {
+          console.error('[ClientStart] fetch community names error', error);
+          return;
+        }
+
+        const rows = (data || []) as CommunityNameRow[];
+        const map: Record<string, string> = {};
+        for (const r of rows) map[r.id] = r.name;
+
+        setCommunityNameById((prev) => ({ ...prev, ...map }));
+      } finally {
+        setLoadingNames(false);
+      }
+    };
+
+    fetchCommunityNames();
+  }, [step, communitiesUsed, activeConversations]);
+
   /* ========= REALTIME: NOVAS MENSAGENS DO SUPORTE ========= */
 
   useEffect(() => {
@@ -289,10 +337,7 @@ const ClientStart: React.FC = () => {
           if (!convId) return;
           if (!activeIds.includes(convId)) return;
 
-          setUnreadByConvId((prev) => ({
-            ...prev,
-            [convId]: true,
-          }));
+          setUnreadByConvId((prev) => ({ ...prev, [convId]: true }));
         }
       )
       .subscribe();
@@ -318,7 +363,6 @@ const ClientStart: React.FC = () => {
         return;
       }
 
-      // resolve id OU slug -> id real
       const { data: comm, error: commErr } = await supabasePublic
         .from('communities')
         .select('id, slug')
@@ -336,24 +380,17 @@ const ClientStart: React.FC = () => {
 
       const resolvedCommunityId = comm.id;
 
-      // se já existir conversa ativa dessa comunidade, reutiliza
       const existingActive = activeConversations.find(
         (c) => c.communityId === resolvedCommunityId
       );
-
       if (existingActive) {
-        setUnreadByConvId((prev) => ({
-          ...prev,
-          [existingActive.id]: false,
-        }));
-
+        setUnreadByConvId((prev) => ({ ...prev, [existingActive.id]: false }));
         setActiveConversationId(existingActive.id);
         localStorage.setItem('redoma_client_cid', resolvedCommunityId);
         navigate('/client/chat');
         return;
       }
 
-      // cria/recupera member
       const normalizedFullName = normalizeFullName(rawName);
 
       const { data: memberData, error: memberError } = await supabasePublic
@@ -377,7 +414,6 @@ const ClientStart: React.FC = () => {
         return;
       }
 
-      // sessão do membro (usada pelo app)
       const session = {
         memberId: memberData.member_id,
         communityId: memberData.community_id,
@@ -407,11 +443,7 @@ const ClientStart: React.FC = () => {
   };
 
   const handleContinueConversation = (conv: ConversationRow) => {
-    setUnreadByConvId((prev) => ({
-      ...prev,
-      [conv.id]: false,
-    }));
-
+    setUnreadByConvId((prev) => ({ ...prev, [conv.id]: false }));
     setActiveConversationId(conv.id);
     localStorage.setItem('redoma_client_cid', conv.communityId);
     navigate('/client/chat');
@@ -420,11 +452,7 @@ const ClientStart: React.FC = () => {
   /* ======================= RENDER ======================= */
 
   const renderIdentityStep = () => (
-    <form
-      onSubmit={handleSubmitIdentity}
-      className="p-10 space-y-6 pt-6"
-      autoComplete="on"
-    >
+    <form onSubmit={handleSubmitIdentity} className="p-10 space-y-6 pt-6" autoComplete="on">
       <div className="space-y-2">
         <label
           htmlFor="fullName"
@@ -450,9 +478,7 @@ const ClientStart: React.FC = () => {
         {fullNameError && (
           <div className="flex items-start gap-2 mt-1 px-1 animate-in fade-in slide-in-from-top-1">
             <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
-            <p className="text-[11px] font-semibold text-red-600 leading-tight">
-              {fullNameError}
-            </p>
+            <p className="text-[11px] font-semibold text-red-600 leading-tight">{fullNameError}</p>
           </div>
         )}
       </div>
@@ -483,9 +509,7 @@ const ClientStart: React.FC = () => {
         {phoneError && (
           <div className="flex items-start gap-2 mt-1 px-1 animate-in fade-in slide-in-from-top-1">
             <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
-            <p className="text-[11px] font-semibold text-red-600 leading-tight">
-              {phoneError}
-            </p>
+            <p className="text-[11px] font-semibold text-red-600 leading-tight">{phoneError}</p>
           </div>
         )}
       </div>
@@ -522,9 +546,7 @@ const ClientStart: React.FC = () => {
       {communityError && (
         <div className="flex items-start gap-2 mt-1 px-1 animate-in fade-in slide-in-from-top-1">
           <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
-          <p className="text-[11px] font-semibold text-red-600 leading-tight">
-            {communityError}
-          </p>
+          <p className="text-[11px] font-semibold text-red-600 leading-tight">{communityError}</p>
         </div>
       )}
 
@@ -538,19 +560,19 @@ const ClientStart: React.FC = () => {
             </h3>
           </div>
 
-          {loadingCommunities ? (
+          {loadingCommunities || loadingNames ? (
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <Loader2 className="animate-spin" size={14} />
               Carregando suas conversas...
             </div>
           ) : activeConversations.length === 0 ? (
-            <p className="text-[11px] text-slate-400">
-              Você não possui conversas ativas no momento.
-            </p>
+            <p className="text-[11px] text-slate-400">Você não possui conversas ativas no momento.</p>
           ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {activeConversations.map((conv) => {
                 const hasUnread = !!unreadByConvId[conv.id];
+                const label = getCommunityLabel(conv.communityId);
+
                 return (
                   <button
                     key={conv.id}
@@ -559,7 +581,7 @@ const ClientStart: React.FC = () => {
                     className="w-full flex items-center justify-between rounded-2xl border border-redoma-steel/10 bg-slate-50 px-4 py-3 text-left text-[11px] text-slate-700 hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition"
                   >
                     <span className="truncate">
-                      Comunidade: <span className="font-semibold">{conv.communityId}</span>
+                      Comunidade: <span className="font-semibold">{label}</span>
                     </span>
 
                     <span className="flex items-center gap-2">
@@ -580,7 +602,7 @@ const ClientStart: React.FC = () => {
           )}
         </div>
 
-        {/* NOVO: botão catálogo de comunidades (página separada) */}
+        {/* ✅ botão para catálogo (página à parte) */}
         <button
           type="button"
           onClick={() => navigate('/client/communities')}
@@ -592,11 +614,9 @@ const ClientStart: React.FC = () => {
 
         {/* Comunidades em que já contribuiu */}
         <div className="space-y-3">
-          <p className="text-sm text-slate-500">
-            Qual comunidade deseja contribuir hoje?
-          </p>
+          <p className="text-sm text-slate-500">Qual comunidade deseja contribuir hoje?</p>
 
-          {loadingCommunities ? (
+          {loadingCommunities || loadingNames ? (
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <Loader2 className="animate-spin" size={14} />
               Carregando comunidades...
@@ -604,7 +624,7 @@ const ClientStart: React.FC = () => {
           ) : communitiesUsed.length > 0 ? (
             <>
               <p className="text-[11px] text-slate-500">
-                Clique em uma das comunidades abaixo para iniciar um novo atendimento.
+                Comunidades apoiadas recentemente.
               </p>
               <div className="flex flex-wrap gap-2">
                 {communitiesUsed.map((cid) => (
@@ -613,13 +633,18 @@ const ClientStart: React.FC = () => {
                     type="button"
                     onClick={() => handleSelectExistingCommunity(cid)}
                     className="px-3 py-1.5 rounded-full border border-slate-200 text-[11px] text-slate-700 hover:border-redoma-steel hover:text-redoma-steel transition"
+                    title={cid} // mantém acessível sem “mostrar” na UI
                   >
-                    {cid}
+                    {getCommunityLabel(cid)}
                   </button>
                 ))}
               </div>
             </>
-          ) : null}
+          ) : (
+            <p className="text-[11px] text-slate-400">
+              Você ainda não iniciou atendimento em nenhuma comunidade.
+            </p>
+          )}
         </div>
 
         {/* Outra comunidade */}
@@ -630,7 +655,7 @@ const ClientStart: React.FC = () => {
           <form className="space-y-2" onSubmit={handleSubmitNewCommunity}>
             <input
               type="text"
-              placeholder="Ex: unidos-somos-fortes"
+              placeholder="Digite o ID da comunidade (ex: ipiranga)"
               value={communityInput}
               onChange={(e) => {
                 setCommunityInput(e.target.value);
@@ -665,9 +690,7 @@ const ClientStart: React.FC = () => {
         >
           Trocar dados
         </button>
-        <p className="text-[10px] text-slate-400">
-          Conectando você à rede de suporte Redoma.
-        </p>
+        <p className="text-[10px] text-slate-400">Conectando você à rede de suporte Redoma.</p>
       </div>
     </div>
   );
