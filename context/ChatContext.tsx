@@ -239,7 +239,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // ⚠️ IMPORTANTÍSSIMO: preencher client_token (snake_case) porque as policies usam isso
+    // preencher client_token (snake_case) porque as policies usam isso
     const conv = {
       id,
       community_id: communityId,
@@ -350,11 +350,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const claimConversation = async (conversationId: string) => {
-    const claimedBy = currentUser?.name || 'Atendente';
+    // ✅ FIX: claimed_by estava sendo usado sem existir
+    const claimed_by = currentUser?.name || 'Atendente';
+    const claimed_at = new Date().toISOString();
 
     const { data, error } = await supabaseSupport
       .from('conversations')
-      .update({ status: 'claimed', claimed_by })
+      .update({ status: 'claimed', claimed_by, claimed_at })
       .eq('id', conversationId)
       .select('*')
       .single();
@@ -364,9 +366,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const closeConversation = async (conversationId: string) => {
+    const closed_at = new Date().toISOString();
+
     const { data, error } = await supabaseSupport
       .from('conversations')
-      .update({ status: 'closed' })
+      .update({ status: 'closed', closed_at })
       .eq('id', conversationId)
       .select('*')
       .single();
