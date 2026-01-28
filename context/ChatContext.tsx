@@ -107,7 +107,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: msgs, error: msgErr } = await supabaseSupport
           .from('messages')
           .select('*')
-          .order('createdAt', { ascending: true });
+          .order('created_at', { ascending: true });
 
         if (msgErr) console.error('[support fetch messages]', msgErr);
         setMessages((msgs || []) as Message[]);
@@ -158,8 +158,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: msgs, error: msgErr } = await supabasePublic
         .from('messages')
         .select('*')
-        .eq('conversationId', activeConvId)
-        .order('createdAt', { ascending: true });
+        .eq('conversation_id', activeConvId)
+        .order('created_at', { ascending: true });
 
       if (msgErr) console.error('[client fetch active messages]', msgErr);
       setMessages((msgs || []) as Message[]);
@@ -190,7 +190,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             event: 'INSERT',
             schema: 'public',
             table: 'messages',
-            filter: `conversationId=eq.${activeConvId}`,
+            filter: `conversation_id=eq.${activeConvId}`,
           },
           (p: any) => {
             if (p?.new) upsertMessage(p.new as Message);
@@ -239,13 +239,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    // ⚠️ IMPORTANTÍSSIMO: preencher client_token (snake_case) porque as policies usam isso
     const conv = {
       id,
-      communityId,
+      community_id: communityId,
       status: 'open',
-      claimedBy: null,
-      createdAt: new Date().toISOString(),
-      memberId: memberId ?? null,
+      claimed_by: null,
+      created_at: new Date().toISOString(),
+      member_id: memberId ?? null,
       client_token: clientToken,
     };
 
@@ -278,12 +279,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id:
         (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
         Math.random().toString(36).slice(2) + Date.now().toString(36),
-      conversationId,
-      senderType,
-      messageType: 'text' as const,
+      conversation_id: conversationId,
+      sender_type: senderType,
+      message_type: 'text' as const,
       text,
       client_token: clientToken,
-      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
     };
 
     // optimistic local
@@ -319,14 +320,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id:
         (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
         Math.random().toString(36).slice(2) + Date.now().toString(36),
-      conversationId,
-      senderType,
-      messageType: 'image' as const,
+      conversation_id: conversationId,
+      sender_type: senderType,
+      message_type: 'image' as const,
       text: '',
-      imageUrl: publicUrl,
-      storagePath: path,
+      image_url: publicUrl,
+      storage_path: path,
       client_token: clientToken,
-      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString(),
     };
 
     upsertMessage(payload as any);
@@ -377,7 +378,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const getConversation = (id: string) => conversations.find((c) => c.id === id);
 
   const getMessages = (conversationId: string) =>
-    messages.filter((m) => m.conversationId === conversationId);
+    messages.filter((m) => m.conversation_id === conversationId);
 
   return (
     <ChatContext.Provider

@@ -4,16 +4,20 @@ export type ConversationStatus = 'open' | 'claimed' | 'closed';
 
 export interface Conversation {
   id: string;
-  communityId: string;
+  community_id: string;
   status: ConversationStatus;
-  claimedBy?: string | null;
-  createdAt: string;
+  claimed_by?: string | null;
+  created_at: string;
 
   // amarra a conversa a uma pessoa da comunidade (members.member_id)
-  memberId?: string | null;
+  member_id?: string | null;
 
   // nome do membro (se vier de join / view)
-  memberName?: string | null;
+  member_name?: string | null;
+
+  // timestamps de claim e close
+  claimed_at?: string | null;
+  closed_at?: string | null;
 
   // "visto"
   last_client_seen_at?: string | null;
@@ -29,23 +33,28 @@ export type MessageType = 'text' | 'image';
 
 export interface Message {
   id: string;
-  conversationId: string;
-  senderType: SenderType;
+  conversation_id: string;
+  sender_type: SenderType;
 
   // tipo da mensagem
-  messageType: MessageType;
+  message_type: MessageType;
 
-  // texto (quando messageType = 'text')
+  // texto (quando message_type = 'text')
   text?: string;
 
-  // imagem (quando messageType = 'image')
-  imageUrl?: string | null;
-  imageThumbUrl?: string | null;
+  // imagem (quando message_type = 'image')
+  image_url?: string | null;
+  image_thumb_url?: string | null;
+  
+  // metadados da imagem
+  image_path?: string | null;
+  image_mime?: string | null;
+  image_size_bytes?: number | null;
 
   // caminho original no bucket (bom pra deletar futuramente)
-  storagePath?: string | null;
+  storage_path?: string | null;
 
-  createdAt: string;
+  created_at: string;
 
   client_token?: string | null;
 }
