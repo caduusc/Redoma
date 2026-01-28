@@ -33,7 +33,7 @@ type Step = 'IDENTITY' | 'COMMUNITY';
 
 type ConversationRow = {
   id: string;
-  community_id: string;
+  communityId: string;
   status: string | null;
   created_at: string;
   last_client_seen_at: string | null;
@@ -48,7 +48,7 @@ type CommunityRowMinimal = {
 
 const ClientStart: React.FC = () => {
   const navigate = useNavigate();
-  const { createConversation, setActiveconversation_id } = useChat();
+  const { createConversation, setActiveConversationId } = useChat();
 
   // garante token do cliente (para outras partes do app)
   useMemo(() => getOrCreateClientToken(), []);
@@ -87,7 +87,7 @@ const ClientStart: React.FC = () => {
   const [activeConversations, setActiveConversations] = useState<ConversationRow[]>([]);
   const [unreadByConvId, setUnreadByConvId] = useState<Record<string, boolean>>({});
 
-  // 🔥 NOVO: mapa community_id -> communityName (pra exibir nome ao invés do ID)
+  // 🔥 NOVO: mapa communityId -> communityName (pra exibir nome ao invés do ID)
   const [communityNameById, setCommunityNameById] = useState<Record<string, string>>({});
   const [loadingNames, setLoadingNames] = useState(false);
 
@@ -166,8 +166,8 @@ const ClientStart: React.FC = () => {
     fetchCommunityNames();
   }, [step]);
 
-  const getCommunityLabel = (community_id: string) => {
-    return communityNameById[community_id] || community_id;
+  const getCommunityLabel = (communityId: string) => {
+    return communityNameById[communityId] || communityId;
   };
 
   /* ========= STEP 2: BUSCAR CONVERSAS DO USUÁRIO ========= */
@@ -211,9 +211,9 @@ const ClientStart: React.FC = () => {
           return;
         }
 
-        const member_ids = members.map((m: any) => m.member_id).filter(Boolean);
+        const memberIds = members.map((m: any) => m.member_id).filter(Boolean);
 
-        if (member_ids.length === 0) {
+        if (memberIds.length === 0) {
           setCommunitiesUsed([]);
           setActiveConversations([]);
           setUnreadByConvId({});
@@ -221,14 +221,13 @@ const ClientStart: React.FC = () => {
         }
 
         const { data, error } = await supabasePublic
-  .from('conversations')
-  .select('id, community_id, status, created_at, last_client_seen_at')
-  .in('member_id', member_ids)
-  .order('created_at', { ascending: false });
-
+          .from('conversations')
+          .select('id, community_id, status, created_at, last_client_seen_at')
+          .in('member_id', memberIds)
+          .order('created_at', { ascending: false });
 
         if (error) {
-          console.error('[ClientStart] fetch conversations by member_id error', error);
+          console.error('[ClientStart] fetch conversations by memberId error', error);
           setCommunityError('Não foi possível carregar suas comunidades.');
           setCommunitiesUsed([]);
           setActiveConversations([]);
@@ -348,12 +347,12 @@ const ClientStart: React.FC = () => {
 
   /* ========= HELPERS PARA CRIAR / REUTILIZAR CONVERSA ========= */
 
-  const startConversationForCommunity = async (community_idOrSlug: string) => {
+  const startConversationForCommunity = async (communityIdOrSlug: string) => {
     setSubmittingConversation(true);
     setCommunityError(null);
 
     try {
-      const normalizedInput = community_idOrSlug.trim().toLowerCase();
+      const normalizedInput = communityIdOrSlug.trim().toLowerCase();
       const rawName = fullName.trim();
       const phoneNorm = normalizePhone(phone);
 
@@ -364,11 +363,10 @@ const ClientStart: React.FC = () => {
 
       // resolve id OU slug -> id real
       const { data: comm, error: commErr } = await supabasePublic
-  .from('communities')
-  .select('id, slug')
-  .or(`id.eq.${normalizedInput},slug.eq.${normalizedInput}`)
-  .maybeSingle();
-
+        .from('communities')
+        .select('id, slug')
+        .or(`id.eq.${normalizedInput},slug.eq.${normalizedInput}`)
+        .maybeSingle();
 
       if (commErr) throw commErr;
 
@@ -379,10 +377,10 @@ const ClientStart: React.FC = () => {
         return;
       }
 
-      const resolvedcommunity_id = comm.id;
+      const resolvedCommunityId = comm.id;
 
       const existingActive = activeConversations.find(
-        (c) => c.community_id === resolvedcommunity_id
+        (c) => c.community_id === resolvedCommunityId
       );
       if (existingActive) {
         setUnreadByConvId((prev) => ({
@@ -390,8 +388,8 @@ const ClientStart: React.FC = () => {
           [existingActive.id]: false,
         }));
 
-        setActiveconversation_id(existingActive.id);
-        localStorage.setItem('redoma_client_cid', resolvedcommunity_id);
+        setActiveConversationId(existingActive.id);
+        localStorage.setItem('redoma_client_cid', resolvedCommunityId);
         navigate('/client/chat');
         return;
       }
@@ -403,7 +401,7 @@ const ClientStart: React.FC = () => {
         .from('members')
         .upsert(
           {
-            community_id: resolvedcommunity_id,
+            community_id: resolvedCommunityId,
             full_name: rawName,
             full_name_normalized: normalizedFullName,
             phone: phoneNorm,
@@ -422,14 +420,14 @@ const ClientStart: React.FC = () => {
 
       // sessão do membro
       const session = {
-        member_id: memberData.member_id,
-        community_id: memberData.community_id,
+        memberId: memberData.member_id,
+        communityId: memberData.community_id,
         fullName: memberData.full_name,
       };
       localStorage.setItem('redoma_member_session', JSON.stringify(session));
-      localStorage.setItem('redoma_client_cid', resolvedcommunity_id);
+      localStorage.setItem('redoma_client_cid', resolvedCommunityId);
 
-      await createConversation(resolvedcommunity_id);
+      await createConversation(resolvedCommunityId);
       navigate('/client/chat');
     } catch (err) {
       console.error('Erro ao iniciar conversa:', err);
@@ -439,8 +437,8 @@ const ClientStart: React.FC = () => {
     }
   };
 
-  const handleSelectExistingCommunity = (community_id: string) => {
-    startConversationForCommunity(community_id);
+  const handleSelectExistingCommunity = (communityId: string) => {
+    startConversationForCommunity(communityId);
   };
 
   const handleSubmitNewCommunity = (e: React.FormEvent) => {
@@ -454,7 +452,7 @@ const ClientStart: React.FC = () => {
       [conv.id]: false,
     }));
 
-    setActiveconversation_id(conv.id);
+    setActiveConversationId(conv.id);
     localStorage.setItem('redoma_client_cid', conv.community_id);
     navigate('/client/chat');
   };
