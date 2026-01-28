@@ -364,10 +364,11 @@ const ClientStart: React.FC = () => {
 
       // resolve id OU slug -> id real
       const { data: comm, error: commErr } = await supabasePublic
-        .from('communities')
-        .select('id, slug')
-        .or(`id.eq.${normalizedInput},slug.eq.${normalizedInput}`)
-        .maybeSingle();
+  .from('communities')
+  .select('id, slug')
+  .or(`id.eq.${normalizedInput},slug.eq.${normalizedInput}`)
+  .maybeSingle();
+
 
       if (commErr) throw commErr;
 
