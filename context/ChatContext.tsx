@@ -354,7 +354,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const { data, error } = await supabaseSupport
       .from('conversations')
-      .update({ status: 'claimed', claimedBy })
+      .update({ status: 'claimed', claimed_by })
       .eq('id', conversationId)
       .select('*')
       .single();
