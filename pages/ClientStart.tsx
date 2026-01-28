@@ -33,9 +33,9 @@ type Step = 'IDENTITY' | 'COMMUNITY';
 
 type ConversationRow = {
   id: string;
-  communityId: string;
+  community_id: string;
   status: string | null;
-  createdAt: string;
+  created_at: string;
   last_client_seen_at: string | null;
 };
 
@@ -166,7 +166,7 @@ const ClientStart: React.FC = () => {
     fetchCommunityNames();
   }, [step]);
 
-  const getCommunityLabel = (communityId: string) => {
+  const getCommunityLabel = (community_id: string) => {
     return communityNameById[communityId] || communityId;
   };
 
@@ -222,8 +222,8 @@ const ClientStart: React.FC = () => {
 
         const { data, error } = await supabasePublic
           .from('conversations')
-          .select('id, communityId, status, createdAt, last_client_seen_at')
-          .in('memberId', memberIds)
+          .select('id, community_id, status, created_at, last_client_seen_at')
+          .in('member_id', member_ids)
           .order('createdAt', { ascending: false });
 
         if (error) {
@@ -238,7 +238,7 @@ const ClientStart: React.FC = () => {
         const convs = (data || []) as ConversationRow[];
 
         const uniqueCommunities = Array.from(
-          new Set(convs.map((c) => c.communityId).filter(Boolean))
+          new Set(convs.map((c) => c.community_id).filter(Boolean))
         );
         setCommunitiesUsed(uniqueCommunities);
 
@@ -246,7 +246,7 @@ const ClientStart: React.FC = () => {
         const twentyFourHoursMs = 24 * 60 * 60 * 1000;
 
         const active = convs.filter((c) => {
-          const created = new Date(c.createdAt).getTime();
+          const created = new Date(c.created_at).getTime();
           const within24h = now - created <= twentyFourHoursMs;
           const isOpen = c.status !== 'closed' && c.status !== 'CLOSED';
           return within24h && isOpen;
@@ -254,8 +254,8 @@ const ClientStart: React.FC = () => {
 
         const byCommunity = new Map<string, ConversationRow>();
         for (const c of active) {
-          if (!byCommunity.has(c.communityId)) {
-            byCommunity.set(c.communityId, c);
+          if (!byCommunity.has(c.community_id)) {
+            byCommunity.set(c.community_id, c);
           }
         }
 
@@ -271,9 +271,9 @@ const ClientStart: React.FC = () => {
 
         const { data: msgs, error: msgErr } = await supabasePublic
           .from('messages')
-          .select('conversationId, senderType, createdAt')
+          .select('conversation_id, sender_type, created_at')
           .in('conversationId', activeIds)
-          .eq('senderType', 'agent');
+          .eq('sender_type', 'agent');
 
         if (msgErr || !msgs) {
           if (msgErr) console.error('[ClientStart] fetch messages for unread error', msgErr);
@@ -288,8 +288,8 @@ const ClientStart: React.FC = () => {
             : 0;
 
           const hasUnread = (msgs as any[]).some((m) => {
-            if (m.conversationId !== conv.id) return false;
-            const msgTs = new Date(m.createdAt).getTime();
+            if (m.conversation_id !== conv.id) return false;
+            const msgTs = new Date(m.created_at).getTime();
             return msgTs > lastSeenTs;
           });
 
@@ -325,10 +325,10 @@ const ClientStart: React.FC = () => {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: 'senderType=eq.agent',
+          filter: 'sender_type=eq.agent',
         },
         (payload: any) => {
-          const convId = payload.new?.conversationId;
+          const convId = payload.new?.conversation_id;
           if (!convId) return;
           if (!activeIds.includes(convId)) return;
 
@@ -380,7 +380,7 @@ const ClientStart: React.FC = () => {
       const resolvedCommunityId = comm.id;
 
       const existingActive = activeConversations.find(
-        (c) => c.communityId === resolvedCommunityId
+        (c) => c.community_id === resolvedCommunityId
       );
       if (existingActive) {
         setUnreadByConvId((prev) => ({
@@ -437,7 +437,7 @@ const ClientStart: React.FC = () => {
     }
   };
 
-  const handleSelectExistingCommunity = (communityId: string) => {
+  const handleSelectExistingCommunity = (community_id: string) => {
     startConversationForCommunity(communityId);
   };
 
@@ -453,7 +453,7 @@ const ClientStart: React.FC = () => {
     }));
 
     setActiveConversationId(conv.id);
-    localStorage.setItem('redoma_client_cid', conv.communityId);
+    localStorage.setItem('redoma_client_cid', conv.community_id);
     navigate('/client/chat');
   };
 
@@ -585,7 +585,7 @@ const ClientStart: React.FC = () => {
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
               {activeConversations.map((conv) => {
                 const hasUnread = !!unreadByConvId[conv.id];
-                const label = getCommunityLabel(conv.communityId);
+                const label = getCommunityLabel(conv.community_id);
 
                 return (
                   <button

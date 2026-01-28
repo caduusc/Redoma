@@ -116,10 +116,10 @@ const AgentChat: React.FC = () => {
   const isOpen = conversation.status === 'open';
 
   // Título = nome do cliente; fallback = comunidade
-  const title = memberName || conversation.communityId || 'Atendimento';
+  const title = memberName || conversation.community_id || 'Atendimento';
   // Subtítulo = comunidade
-  const subtitle = conversation.communityId
-    ? `Comunidade: ${conversation.communityId}`
+  const subtitle = conversation.community_id
+    ? `Comunidade: ${conversation.community_id}`
     : 'Painel Administrativo';
 
   return (

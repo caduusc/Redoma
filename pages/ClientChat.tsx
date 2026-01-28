@@ -36,17 +36,17 @@ const ClientChat: React.FC = () => {
     if (!messages.length) return false;
     // Verifica se a última mensagem é do agente
     const lastMsg = messages[messages.length - 1];
-    return lastMsg?.senderType === 'agent';
+    return lastMsg?.sender_type === 'agent';
   }, [messages]);
 
   // ✅ fallback: tenta pegar o communityId do localStorage (setado no ClientStart)
   const communityIdForTitle = useMemo(() => {
     return (
-      conversation?.communityId ||
+      conversation?.community_id ||
       localStorage.getItem('redoma_client_cid') ||
       null
     );
-  }, [conversation?.communityId]);
+  }, [conversation?.community_id]);
 
   // 🔥 resolve communityId -> name (para o título)
   useEffect(() => {

@@ -39,14 +39,14 @@ const AgentInbox: React.FC = () => {
 
     return messages.some(
       (m) =>
-        m.conversationId === conv.id &&
-        m.senderType === 'client' &&
-        new Date(m.createdAt).getTime() > lastSeenTs
+        m.conversation_id === conv.id &&
+        m.sender_type === 'client' &&
+        new Date(m.created_at).getTime() > lastSeenTs
     );
   };
 
   const filteredConversations = conversations.filter((c) => {
-    if (filter === 'claimed') return c.status === 'claimed' && c.claimedBy === currentUser?.name;
+    if (filter === 'claimed') return c.status === 'claimed' && c.claimed_by === currentUser?.name;
     return c.status === filter;
   });
 
@@ -110,7 +110,7 @@ const AgentInbox: React.FC = () => {
             filteredConversations
               .sort(
                 (a, b) =>
-                  new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
               )
               .map((conv) => {
                 const unread = hasUnreadFromClient(conv);
@@ -150,17 +150,17 @@ const AgentInbox: React.FC = () => {
                       <div className="flex items-center gap-1.5">
                         <Clock size={12} className="text-redoma-steel" />
                         <span>
-                          {new Date(conv.createdAt).toLocaleTimeString([], {
+                          {new Date(conv.created_at).toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
                         </span>
                       </div>
 
-                      {conv.claimedBy && (
+                      {conv.claimed_by && (
                         <div className="flex items-center gap-1.5">
                           <User size={12} className="text-redoma-steel" />
-                          <span>{conv.claimedBy}</span>
+                          <span>{conv.claimed_by}</span>
                         </div>
                       )}
                     </div>
