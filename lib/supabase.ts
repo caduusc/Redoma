@@ -53,23 +53,43 @@ export const getOrCreateClientJwt = async () => {
   const client_token = getClientToken();
   if (!client_token) throw new Error('missing client_token');
 
-  const res = await fetch(`${supabaseUrl}/functions/v1/issue-client-jwt`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: supabaseAnonKey,
-    },
-    body: JSON.stringify({ client_token }),
-  });
+  // timeout pra não travar boot
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 6000);
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error || 'failed_to_issue_client_jwt');
+  try {
+    const res = await fetch(`${supabaseUrl}/functions/v1/issue-client-jwt`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: supabaseAnonKey,
+      },
+      body: JSON.stringify({ client_token }),
+      signal: ctrl.signal,
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      console.error('[issue-client-jwt] failed', { status: res.status, data });
+      return null; // fallback p/ header
+    }
+
+    if (!data?.token) {
+      console.error('[issue-client-jwt] missing token', data);
+      return null;
+    }
+
+    localStorage.setItem(CLIENT_JWT_KEY, data.token);
+    return data.token as string;
+  } catch (e) {
+    console.error('[issue-client-jwt] error', e);
+    return null; // fallback p/ header
+  } finally {
+    clearTimeout(t);
   }
-
-  localStorage.setItem(CLIENT_JWT_KEY, data.token);
-  return data.token as string;
 };
+
 
 /**
  * Aplica JWT no realtime do supabasePublic

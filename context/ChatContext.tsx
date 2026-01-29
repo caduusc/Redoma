@@ -50,14 +50,14 @@ const getOrCreateClientToken = () => {
 };
 
 const ensureClientJwtApplied = async () => {
-  // garante que o token exista
   getOrCreateClientToken();
 
-  // emite/pega JWT e aplica no realtime
-  const jwt = await getOrCreateClientJwt();
+  const jwt = await getOrCreateClientJwt(); // pode voltar null
   if (jwt) setPublicClientJwt(jwt);
-  return jwt;
+
+  return jwt; // null = segue com header (HTTP)
 };
+
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -185,13 +185,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // ============ MODO CLIENTE ============
-      // aplica JWT no realtime + HTTP
-      try {
-        await ensureClientJwtApplied();
-      } catch (e) {
-        console.error('[client jwt] failed', e);
-      }
+     // ============ MODO CLIENTE ============
+try {
+  await ensureClientJwtApplied();
+} catch (e) {
+  console.error('[client jwt] failed (fallback header)', e);
+}
+
 
       console.log('[ChatProvider boot] modo CLIENTE, activeConvId =', activeConvId);
 
