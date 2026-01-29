@@ -1,15 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://wjpkvdkmkoojjmnjdtnk.supabase.co';
+// ✅ Usando a nova Publishable Key
 const supabaseAnonKey = 'sb_publishable_9tyk3EMUSLUy3VkK9yypaQ_NWRYPmUl';
 
-// ✅ EXPORTAR para uso no ChatContext
 export const CLIENT_TOKEN_KEY = 'redoma_client_token';
 
 /**
  * Fetch wrapper
  * Injeta automaticamente o header `x-client-token`
- * em TODAS as requests feitas pelo supabasePublic
  */
 const withClientTokenFetch: typeof fetch = async (input, init) => {
   const headers = new Headers(init?.headers || {});
@@ -27,9 +26,6 @@ const withClientTokenFetch: typeof fetch = async (input, init) => {
 
 /**
  * 1) Público (CLIENTE)
- * - Não persiste sessão
- * - Não interfere no login do suporte/admin
- * - Sempre envia x-client-token → RLS funciona
  */
 export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -44,8 +40,6 @@ export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
 
 /**
  * 2) SUPORTE
- * - Sessão própria
- * - Não usa token customizado
  */
 export const supabaseSupport = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -58,7 +52,6 @@ export const supabaseSupport = createClient(supabaseUrl, supabaseAnonKey, {
 
 /**
  * 3) MASTER / ADMIN
- * - Sessão própria e isolada
  */
 export const supabaseMaster = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -68,14 +61,3 @@ export const supabaseMaster = createClient(supabaseUrl, supabaseAnonKey, {
     storageKey: 'redoma_master_auth',
   },
 });
-
-/**
- * ✅ FUNÇÃO PARA REFRESH DO TOKEN REALTIME
- * (Não é mais necessária, mas mantida para compatibilidade)
- */
-export const refreshPublicRealtimeToken = async () => {
-  // No Supabase moderno, não precisa fazer refresh manual
-  // O client já gerencia isso automaticamente
-  // Mas deixamos a função para não quebrar imports
-  return Promise.resolve();
-};
