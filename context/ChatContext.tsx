@@ -7,7 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { Conversation, Message, User, SenderType } from '../types';
-import { supabasePublic, supabaseSupport } from '../lib/supabase';
+import { supabasePublic, supabaseSupport, refreshPublicRealtimeToken } from '../lib/supabase';
 import { uploadChatImage } from '../lib/uploadChatImage';
 
 interface ChatContextType {
@@ -35,15 +35,17 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
+const CLIENT_TOKEN_KEY = 'redoma_client_token';
+
 const getOrCreateClientToken = () => {
-  const existing = localStorage.getItem('redoma_client_token');
+  const existing = localStorage.getItem(CLIENT_TOKEN_KEY);
   if (existing) return existing;
 
   const token =
     (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
     Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-  localStorage.setItem('redoma_client_token', token);
+  localStorage.setItem(CLIENT_TOKEN_KEY, token);
   return token;
 };
 
@@ -74,8 +76,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const upsertMessage = useCallback((msg: Message) => {
     setMessages((prev) => {
       if (prev.some((m) => m.id === msg.id)) return prev;
-      return [...prev, msg];
+
+      const next = [...prev, msg];
+
+      // mantém ordenação estável (ajuda realtime + trigger)
+      next.sort((a, b) => {
+        const ta = new Date(a.created_at).getTime();
+        const tb = new Date(b.created_at).getTime();
+        return ta - tb;
+      });
+
+      return next;
     });
+  }, []);
+
+  const removeOptimisticMessage = useCallback((id: string) => {
+    setMessages((prev) => prev.filter((m) => m.id !== id));
   }, []);
 
   const setActiveConversationId = useCallback((id: string | null) => {
@@ -89,9 +105,41 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let convChannel: any;
     let msgChannel: any;
+    let cancelled = false;
+
+    const safeUnsub = async () => {
+      try {
+        if (convChannel) {
+          await convChannel.unsubscribe?.();
+          // removeChannel evita “sobras” de channel em alguns casos
+          // @ts-ignore
+          supabasePublic.removeChannel?.(convChannel);
+          // @ts-ignore
+          supabaseSupport.removeChannel?.(convChannel);
+        }
+      } catch {}
+      try {
+        if (msgChannel) {
+          await msgChannel.unsubscribe?.();
+          // @ts-ignore
+          supabasePublic.removeChannel?.(msgChannel);
+          // @ts-ignore
+          supabaseSupport.removeChannel?.(msgChannel);
+        }
+      } catch {}
+    };
 
     const boot = async () => {
       const token = getOrCreateClientToken();
+
+      // IMPORTANTÍSSIMO:
+      // garante que o realtime do supabasePublic está autenticado com o token atual
+      // (isso faz a mensagem do trigger aparecer sem reload)
+      try {
+        refreshPublicRealtimeToken?.();
+      } catch {
+        // ignore
+      }
 
       // ============ MODO SUPORTE ============
       if (isAgent) {
@@ -101,6 +149,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('conversations')
           .select('*');
 
+        if (cancelled) return;
+
         if (convErr) console.error('[support fetch conversations]', convErr);
         setConversations((convs || []) as Conversation[]);
 
@@ -108,6 +158,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .from('messages')
           .select('*')
           .order('created_at', { ascending: true });
+
+        if (cancelled) return;
 
         if (msgErr) console.error('[support fetch messages]', msgErr);
         setMessages((msgs || []) as Message[]);
@@ -152,6 +204,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('id', activeConvId)
         .maybeSingle();
 
+      if (cancelled) return;
+
       if (convErr) console.error('[client fetch active conversation]', convErr);
       setConversations(conv ? ([conv] as Conversation[]) : []);
 
@@ -160,6 +214,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .select('*')
         .eq('conversation_id', activeConvId)
         .order('created_at', { ascending: true });
+
+      if (cancelled) return;
 
       if (msgErr) console.error('[client fetch active messages]', msgErr);
       setMessages((msgs || []) as Message[]);
@@ -181,7 +237,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         )
         .subscribe();
 
-      // realtime: mensagens
+      // realtime: mensagens (captura INSERT do cliente e do trigger)
       msgChannel = supabasePublic
         .channel(`client_messages_${activeConvId}`)
         .on(
@@ -202,8 +258,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     boot();
 
     return () => {
-      convChannel?.unsubscribe?.();
-      msgChannel?.unsubscribe?.();
+      cancelled = true;
+      void safeUnsub();
     };
   }, [isAgent, activeConvId, upsertConversation, upsertMessage]);
 
@@ -224,6 +280,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const createConversation = async (communityId: string) => {
     const clientToken = getOrCreateClientToken();
+
+    // garantir que realtime esteja com o token atualizado
+    try {
+      refreshPublicRealtimeToken?.();
+    } catch {
+      // ignore
+    }
+
     const id =
       (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
       Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -239,7 +303,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // preencher client_token (snake_case) porque as policies usam isso
     const conv = {
       id,
       community_id: communityId,
@@ -275,10 +338,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addMessage = async (conversationId: string, text: string, senderType: SenderType) => {
     const clientToken = getOrCreateClientToken();
 
+    // garantir que realtime esteja com o token atualizado
+    if (senderType !== 'agent') {
+      try {
+        refreshPublicRealtimeToken?.();
+      } catch {
+        // ignore
+      }
+    }
+
+    const optimisticId =
+      (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
+      Math.random().toString(36).slice(2) + Date.now().toString(36);
+
     const payload = {
-      id:
-        (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
-        Math.random().toString(36).slice(2) + Date.now().toString(36),
+      id: optimisticId,
       conversation_id: conversationId,
       sender_type: senderType,
       message_type: 'text' as const,
@@ -301,6 +375,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hint: error.hint,
         code: error.code,
       });
+      // remove optimistic (pra não “sumir” só depois do refresh)
+      removeOptimisticMessage(optimisticId);
       return;
     }
 
@@ -310,16 +386,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const sendImageMessage = async (conversationId: string, file: File, senderType: SenderType) => {
     const clientToken = getOrCreateClientToken();
 
+    // garantir que realtime esteja com o token atualizado
+    if (senderType !== 'agent') {
+      try {
+        refreshPublicRealtimeToken?.();
+      } catch {
+        // ignore
+      }
+    }
+
     const { publicUrl, path } = await uploadChatImage({
       file,
       conversationId,
       senderType,
     });
 
+    const optimisticId =
+      (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
+      Math.random().toString(36).slice(2) + Date.now().toString(36);
+
     const payload = {
-      id:
-        (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
-        Math.random().toString(36).slice(2) + Date.now().toString(36),
+      id: optimisticId,
       conversation_id: conversationId,
       sender_type: senderType,
       message_type: 'image' as const,
@@ -343,6 +430,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hint: error.hint,
         code: error.code,
       });
+      removeOptimisticMessage(optimisticId);
       return;
     }
 
@@ -350,7 +438,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const claimConversation = async (conversationId: string) => {
-    // ✅ FIX: claimed_by estava sendo usado sem existir
     const claimed_by = currentUser?.name || 'Atendente';
     const claimed_at = new Date().toISOString();
 
