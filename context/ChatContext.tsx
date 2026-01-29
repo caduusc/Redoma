@@ -7,7 +7,11 @@ import React, {
   useState,
 } from 'react';
 import { Conversation, Message, User, SenderType } from '../types';
-import { supabasePublic, supabaseSupport, getOrCreateClientJwt, setPublicClientJwt } from '../lib/supabase';
+import {
+  supabasePublic,
+  supabaseSupport,
+  applyClientJwtAndReconnectRealtime,
+} from '../lib/supabase';
 import { uploadChatImage } from '../lib/uploadChatImage';
 
 interface ChatContextType {
@@ -49,15 +53,17 @@ const getOrCreateClientToken = () => {
   return token;
 };
 
-const ensureClientJwtApplied = async () => {
+const ensureClientAuthApplied = async () => {
+  // sempre garante client_token (fallback HTTP)
   getOrCreateClientToken();
 
-  const jwt = await getOrCreateClientJwt(); // pode voltar null
-  if (jwt) setPublicClientJwt(jwt);
-
-  return jwt; // null = segue com header (HTTP)
+  // tenta JWT + reconexão realtime (se falhar, segue no fallback)
+  try {
+    await applyClientJwtAndReconnectRealtime();
+  } catch {
+    // ignore
+  }
 };
-
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -88,10 +94,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (prev.some((m) => m.id === msg.id)) return prev;
 
       const next = [...prev, msg];
+
+      // ordenação estável:
+      // 1) created_at
+      // 2) em empate, client antes de agent
+      // 3) em empate, id
       next.sort((a, b) => {
         const ta = new Date(a.created_at).getTime();
         const tb = new Date(b.created_at).getTime();
-        return ta - tb;
+        if (ta !== tb) return ta - tb;
+
+        const sa = a.sender_type === 'client' ? 0 : 1;
+        const sb = b.sender_type === 'client' ? 0 : 1;
+        if (sa !== sb) return sa - sb;
+
+        return String(a.id).localeCompare(String(b.id));
       });
 
       return next;
@@ -185,13 +202,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-     // ============ MODO CLIENTE ============
-try {
-  await ensureClientJwtApplied();
-} catch (e) {
-  console.error('[client jwt] failed (fallback header)', e);
-}
-
+      // ============ MODO CLIENTE ============
+      try {
+        await ensureClientAuthApplied();
+      } catch (e) {
+        console.error('[client auth] failed (fallback header)', e);
+      }
 
       console.log('[ChatProvider boot] modo CLIENTE, activeConvId =', activeConvId);
 
@@ -237,7 +253,9 @@ try {
             if (p?.new) upsertConversation(p.new as Conversation);
           }
         )
-        .subscribe();
+        .subscribe((status: any) => {
+          console.log('[realtime] conv status =', status);
+        });
 
       msgChannel = supabasePublic
         .channel(`client_messages_${activeConvId}`)
@@ -253,7 +271,9 @@ try {
             if (p?.new) upsertMessage(p.new as Message);
           }
         )
-        .subscribe();
+        .subscribe((status: any) => {
+          console.log('[realtime] msg status =', status);
+        });
     };
 
     boot();
@@ -280,8 +300,7 @@ try {
   /* ===================== ACTIONS ===================== */
 
   const createConversation = async (communityId: string) => {
-    // garante JWT aplicado antes
-    await ensureClientJwtApplied();
+    await ensureClientAuthApplied();
 
     const clientToken = getOrCreateClientToken();
     const id =
@@ -328,7 +347,7 @@ try {
     const clientToken = getOrCreateClientToken();
 
     if (senderType !== 'agent') {
-      await ensureClientJwtApplied();
+      await ensureClientAuthApplied();
     }
 
     const optimisticId =
@@ -363,7 +382,7 @@ try {
     const clientToken = getOrCreateClientToken();
 
     if (senderType !== 'agent') {
-      await ensureClientJwtApplied();
+      await ensureClientAuthApplied();
     }
 
     const { publicUrl, path } = await uploadChatImage({
