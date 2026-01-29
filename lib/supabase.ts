@@ -4,20 +4,36 @@ const supabaseUrl = 'https://wjpkvdkmkoojjmnjdtnk.supabase.co';
 const supabaseAnonKey = 'sb_publishable_9tyk3EMUSLUy3VkK9yypaQ_NWRYPmUl';
 
 const CLIENT_TOKEN_KEY = 'redoma_client_token';
+const CLIENT_JWT_KEY = 'redoma_client_jwt';
+
+const getClientToken = () => {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(CLIENT_TOKEN_KEY);
+};
+
+const getClientJwt = () => {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(CLIENT_JWT_KEY);
+};
 
 /**
- * Fetch wrapper
- * Injeta automaticamente o header `x-client-token`
- * em TODAS as requests HTTP feitas pelo supabasePublic
+ * Fetch wrapper:
+ * - Se existir JWT, usa Authorization Bearer (role=client) -> RLS + Realtime OK
+ * - Se não existir JWT, mantém fallback com x-client-token (HTTP somente)
  */
-const withClientTokenFetch: typeof fetch = async (input, init) => {
+const withClientAuthFetch: typeof fetch = async (input, init) => {
   const headers = new Headers(init?.headers || {});
-  const token =
-    typeof window !== 'undefined' ? localStorage.getItem(CLIENT_TOKEN_KEY) : null;
+  const jwt = getClientJwt();
+  const token = getClientToken();
 
-  if (token) {
+  if (jwt) {
+    headers.set('Authorization', `Bearer ${jwt}`);
+  } else if (token) {
     headers.set('x-client-token', token);
   }
+
+  // sempre bom garantir apikey também (alguns ambientes pedem)
+  headers.set('apikey', supabaseAnonKey);
 
   return fetch(input, {
     ...init,
@@ -26,19 +42,47 @@ const withClientTokenFetch: typeof fetch = async (input, init) => {
 };
 
 /**
- * Helper: pega o token atual do client (SSR-safe)
+ * Emite (ou reaproveita) JWT do cliente via Edge Function
  */
-const getClientToken = () => {
+export const getOrCreateClientJwt = async () => {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(CLIENT_TOKEN_KEY);
+
+  const existing = localStorage.getItem(CLIENT_JWT_KEY);
+  if (existing) return existing;
+
+  const client_token = getClientToken();
+  if (!client_token) throw new Error('missing client_token');
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/issue-client-jwt`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: supabaseAnonKey,
+    },
+    body: JSON.stringify({ client_token }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data?.error || 'failed_to_issue_client_jwt');
+  }
+
+  localStorage.setItem(CLIENT_JWT_KEY, data.token);
+  return data.token as string;
+};
+
+/**
+ * Aplica JWT no realtime do supabasePublic
+ */
+export const setPublicClientJwt = (jwt: string) => {
+  // Realtime usa JWT para autenticar websocket
+  supabasePublic.realtime.setAuth(jwt);
 };
 
 /**
  * 1) Público (CLIENTE)
  * - Não persiste sessão
- * - Não interfere no login do suporte/admin
- * - Sempre envia x-client-token → RLS funciona
- * - IMPORTANTÍSSIMO: também injeta token no Realtime (WebSocket)
+ * - Usa JWT (role=client) quando existir
  */
 export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -47,38 +91,14 @@ export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
   },
   global: {
-    fetch: withClientTokenFetch,
-  },
-  realtime: {
-    params: {
-      // O Realtime não usa global.fetch, então precisa disso aqui
-      headers: {
-        'x-client-token': getClientToken() ?? '',
-      },
-    },
+    fetch: withClientAuthFetch,
   },
 });
 
 /**
- * Se o token mudar depois (ex: login do cliente),
- * chame isso para atualizar o header do realtime sem recriar o client.
- */
-export const refreshPublicRealtimeToken = () => {
-  const token = getClientToken() ?? '';
-  // @ts-ignore - setAuth existe no realtime client interno
-  supabasePublic.realtime.setAuth(token ? `x-client-token=${token}` : '');
-  // Além disso, atualiza params para novas conexões
-  // @ts-ignore
-  supabasePublic.realtime.params = {
-    ...(supabasePublic.realtime.params || {}),
-    headers: { 'x-client-token': token },
-  };
-};
-
-/**
  * 2) SUPORTE
  * - Sessão própria
- * - Não usa token customizado
+ * - Não usa JWT do cliente
  */
 export const supabaseSupport = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

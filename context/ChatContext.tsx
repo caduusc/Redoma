@@ -7,7 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { Conversation, Message, User, SenderType } from '../types';
-import { supabasePublic, supabaseSupport, refreshPublicRealtimeToken } from '../lib/supabase';
+import { supabasePublic, supabaseSupport, getOrCreateClientJwt, setPublicClientJwt } from '../lib/supabase';
 import { uploadChatImage } from '../lib/uploadChatImage';
 
 interface ChatContextType {
@@ -49,6 +49,16 @@ const getOrCreateClientToken = () => {
   return token;
 };
 
+const ensureClientJwtApplied = async () => {
+  // garante que o token exista
+  getOrCreateClientToken();
+
+  // emite/pega JWT e aplica no realtime
+  const jwt = await getOrCreateClientJwt();
+  if (jwt) setPublicClientJwt(jwt);
+  return jwt;
+};
+
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -78,8 +88,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (prev.some((m) => m.id === msg.id)) return prev;
 
       const next = [...prev, msg];
-
-      // mantém ordenação estável (ajuda realtime + trigger)
       next.sort((a, b) => {
         const ta = new Date(a.created_at).getTime();
         const tb = new Date(b.created_at).getTime();
@@ -111,7 +119,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         if (convChannel) {
           await convChannel.unsubscribe?.();
-          // removeChannel evita “sobras” de channel em alguns casos
           // @ts-ignore
           supabasePublic.removeChannel?.(convChannel);
           // @ts-ignore
@@ -130,17 +137,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const boot = async () => {
-      const token = getOrCreateClientToken();
-
-      // IMPORTANTÍSSIMO:
-      // garante que o realtime do supabasePublic está autenticado com o token atual
-      // (isso faz a mensagem do trigger aparecer sem reload)
-      try {
-        refreshPublicRealtimeToken?.();
-      } catch {
-        // ignore
-      }
-
       // ============ MODO SUPORTE ============
       if (isAgent) {
         console.log('[ChatProvider boot] modo SUPORTE');
@@ -190,7 +186,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // ============ MODO CLIENTE ============
-      console.log('[ChatProvider boot] modo CLIENTE, token =', token, 'activeConvId =', activeConvId);
+      // aplica JWT no realtime + HTTP
+      try {
+        await ensureClientJwtApplied();
+      } catch (e) {
+        console.error('[client jwt] failed', e);
+      }
+
+      console.log('[ChatProvider boot] modo CLIENTE, activeConvId =', activeConvId);
 
       if (!activeConvId) {
         setConversations([]);
@@ -220,7 +223,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (msgErr) console.error('[client fetch active messages]', msgErr);
       setMessages((msgs || []) as Message[]);
 
-      // realtime: conversa
       convChannel = supabasePublic
         .channel(`client_conversations_${activeConvId}`)
         .on(
@@ -237,7 +239,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         )
         .subscribe();
 
-      // realtime: mensagens (captura INSERT do cliente e do trigger)
       msgChannel = supabasePublic
         .channel(`client_messages_${activeConvId}`)
         .on(
@@ -279,15 +280,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /* ===================== ACTIONS ===================== */
 
   const createConversation = async (communityId: string) => {
+    // garante JWT aplicado antes
+    await ensureClientJwtApplied();
+
     const clientToken = getOrCreateClientToken();
-
-    // garantir que realtime esteja com o token atualizado
-    try {
-      refreshPublicRealtimeToken?.();
-    } catch {
-      // ignore
-    }
-
     const id =
       (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
       Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -298,9 +294,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const parsed = JSON.parse(rawSession) as { memberId?: string };
         if (parsed?.memberId) memberId = parsed.memberId;
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
     const conv = {
@@ -320,12 +314,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .single();
 
     if (error) {
-      console.error('[createConversation] insert error', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
+      console.error('[createConversation] insert error', error);
       throw error;
     }
 
@@ -338,13 +327,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addMessage = async (conversationId: string, text: string, senderType: SenderType) => {
     const clientToken = getOrCreateClientToken();
 
-    // garantir que realtime esteja com o token atualizado
     if (senderType !== 'agent') {
-      try {
-        refreshPublicRealtimeToken?.();
-      } catch {
-        // ignore
-      }
+      await ensureClientJwtApplied();
     }
 
     const optimisticId =
@@ -361,21 +345,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_at: new Date().toISOString(),
     };
 
-    // optimistic local
     upsertMessage(payload as any);
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
-
     const { data, error } = await client.from('messages').insert(payload as any).select('*').single();
 
     if (error) {
-      console.error('[addMessage] insert error', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
-      // remove optimistic (pra não “sumir” só depois do refresh)
+      console.error('[addMessage] insert error', error);
       removeOptimisticMessage(optimisticId);
       return;
     }
@@ -386,13 +362,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const sendImageMessage = async (conversationId: string, file: File, senderType: SenderType) => {
     const clientToken = getOrCreateClientToken();
 
-    // garantir que realtime esteja com o token atualizado
     if (senderType !== 'agent') {
-      try {
-        refreshPublicRealtimeToken?.();
-      } catch {
-        // ignore
-      }
+      await ensureClientJwtApplied();
     }
 
     const { publicUrl, path } = await uploadChatImage({
@@ -420,16 +391,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     upsertMessage(payload as any);
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
-
     const { data, error } = await client.from('messages').insert(payload as any).select('*').single();
 
     if (error) {
-      console.error('[sendImageMessage] insert error', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
+      console.error('[sendImageMessage] insert error', error);
       removeOptimisticMessage(optimisticId);
       return;
     }
