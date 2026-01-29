@@ -1,14 +1,37 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://wjpkvdkmkoojjmnjdtnk.supabase.co';
-// ✅ Usando a nova Publishable Key
 const supabaseAnonKey = 'sb_publishable_9tyk3EMUSLUy3VkK9yypaQ_NWRYPmUl';
 
 export const CLIENT_TOKEN_KEY = 'redoma_client_token';
 
+// ✅ Função para criar/pegar token do cliente
+export const getOrCreateClientToken = () => {
+  const existing = localStorage.getItem(CLIENT_TOKEN_KEY);
+  if (existing) return existing;
+
+  const token =
+    (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
+    Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+  localStorage.setItem(CLIENT_TOKEN_KEY, token);
+  return token;
+};
+
+// ✅ Função stub para JWT (não faz nada, só para compatibilidade)
+export const ensureClientJwt = async () => {
+  // Com a publishable key, não precisa gerenciar JWT manualmente
+  return supabaseAnonKey;
+};
+
+// ✅ Função stub para aplicar JWT no realtime (não faz nada)
+export const applyRealtimeJwt = (jwt: string) => {
+  // Com a publishable key, isso é gerenciado automaticamente
+  return;
+};
+
 /**
  * Fetch wrapper
- * Injeta automaticamente o header `x-client-token`
  */
 const withClientTokenFetch: typeof fetch = async (input, init) => {
   const headers = new Headers(init?.headers || {});
