@@ -11,7 +11,6 @@ import { Conversation, Message, User, SenderType } from '../types';
 import {
   supabasePublic,
   supabaseSupport,
-  refreshPublicRealtimeToken,
   CLIENT_TOKEN_KEY,
 } from '../lib/supabase';
 import { uploadChatImage } from '../lib/uploadChatImage';
@@ -187,7 +186,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       const token = getOrCreateClientToken();
 
       try {
-        await refreshPublicRealtimeToken();
       } catch {}
 
       if (!activeConvId) {
@@ -289,7 +287,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const createConversation = async (communityId: string) => {
     getOrCreateClientToken();
     try {
-      await refreshPublicRealtimeToken();
     } catch {}
 
     const clientToken = localStorage.getItem(CLIENT_TOKEN_KEY)!;
@@ -313,6 +310,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       community_id: communityId,
       status: 'open',
       claimed_by: null,
+      
       member_id: memberId ?? null,
       client_token: clientToken,
     };
@@ -343,7 +341,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (senderType !== 'agent') {
       try {
-        await refreshPublicRealtimeToken();
       } catch {}
     }
 
@@ -358,6 +355,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       message_type: 'text' as const,
       text,
       client_token: clientToken,
+      
     };
 
     upsertMessage(payload as any);
@@ -389,7 +387,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     if (senderType !== 'agent') {
       try {
-        await refreshPublicRealtimeToken();
       } catch {}
     }
 
@@ -412,6 +409,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       image_url: publicUrl,
       storage_path: path,
       client_token: clientToken,
+      
     };
 
     upsertMessage(payload as any);
