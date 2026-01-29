@@ -7,11 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { Conversation, Message, User, SenderType } from '../types';
-import {
-  supabasePublic,
-  supabaseSupport,
-  applyClientJwtAndReconnectRealtime,
-} from '../lib/supabase';
+import { supabasePublic, supabaseSupport, refreshPublicRealtimeToken, CLIENT_TOKEN_KEY } from '../lib/supabase';
 import { uploadChatImage } from '../lib/uploadChatImage';
 
 interface ChatContextType {
@@ -39,8 +35,6 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
-const CLIENT_TOKEN_KEY = 'redoma_client_token';
-
 const getOrCreateClientToken = () => {
   const existing = localStorage.getItem(CLIENT_TOKEN_KEY);
   if (existing) return existing;
@@ -51,18 +45,6 @@ const getOrCreateClientToken = () => {
 
   localStorage.setItem(CLIENT_TOKEN_KEY, token);
   return token;
-};
-
-const ensureClientAuthApplied = async () => {
-  // sempre garante client_token (fallback HTTP)
-  getOrCreateClientToken();
-
-  // tenta JWT + reconexão realtime (se falhar, segue no fallback)
-  try {
-    await applyClientJwtAndReconnectRealtime();
-  } catch {
-    // ignore
-  }
 };
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -95,10 +77,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const next = [...prev, msg];
 
-      // ordenação estável:
+      // ordem estável:
       // 1) created_at
-      // 2) em empate, client antes de agent
-      // 3) em empate, id
+      // 2) empate: client antes de agent
+      // 3) empate: id
       next.sort((a, b) => {
         const ta = new Date(a.created_at).getTime();
         const tb = new Date(b.created_at).getTime();
@@ -156,8 +138,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const boot = async () => {
       // ============ MODO SUPORTE ============
       if (isAgent) {
-        console.log('[ChatProvider boot] modo SUPORTE');
-
         const { data: convs, error: convErr } = await supabaseSupport
           .from('conversations')
           .select('*');
@@ -203,13 +183,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // ============ MODO CLIENTE ============
-      try {
-        await ensureClientAuthApplied();
-      } catch (e) {
-        console.error('[client auth] failed (fallback header)', e);
-      }
+      const token = getOrCreateClientToken();
 
-      console.log('[ChatProvider boot] modo CLIENTE, activeConvId =', activeConvId);
+      // garante que o Realtime “carrega” o token atual ANTES do subscribe
+      try {
+        await refreshPublicRealtimeToken();
+      } catch {}
 
       if (!activeConvId) {
         setConversations([]);
@@ -253,9 +232,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (p?.new) upsertConversation(p.new as Conversation);
           }
         )
-        .subscribe((status: any) => {
-          console.log('[realtime] conv status =', status);
-        });
+        .subscribe((status: any) => console.log('[realtime client conv status]', status, 'token=', token));
 
       msgChannel = supabasePublic
         .channel(`client_messages_${activeConvId}`)
@@ -271,9 +248,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (p?.new) upsertMessage(p.new as Message);
           }
         )
-        .subscribe((status: any) => {
-          console.log('[realtime] msg status =', status);
-        });
+        .subscribe((status: any) => console.log('[realtime client msg status]', status, 'token=', token));
     };
 
     boot();
@@ -300,9 +275,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /* ===================== ACTIONS ===================== */
 
   const createConversation = async (communityId: string) => {
-    await ensureClientAuthApplied();
+    // garante token e realtime atualizado
+    getOrCreateClientToken();
+    try {
+      await refreshPublicRealtimeToken();
+    } catch {}
 
-    const clientToken = getOrCreateClientToken();
+    const clientToken = localStorage.getItem(CLIENT_TOKEN_KEY)!;
+
     const id =
       (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
       Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -346,8 +326,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addMessage = async (conversationId: string, text: string, senderType: SenderType) => {
     const clientToken = getOrCreateClientToken();
 
+    // antes de inserir como client, garanta realtime atualizado
     if (senderType !== 'agent') {
-      await ensureClientAuthApplied();
+      try {
+        await refreshPublicRealtimeToken();
+      } catch {}
     }
 
     const optimisticId =
@@ -364,6 +347,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       created_at: new Date().toISOString(),
     };
 
+    // optimistic local
     upsertMessage(payload as any);
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
@@ -382,7 +366,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const clientToken = getOrCreateClientToken();
 
     if (senderType !== 'agent') {
-      await ensureClientAuthApplied();
+      try {
+        await refreshPublicRealtimeToken();
+      } catch {}
     }
 
     const { publicUrl, path } = await uploadChatImage({
