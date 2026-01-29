@@ -3,30 +3,34 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = 'https://wjpkvdkmkoojjmnjdtnk.supabase.co';
 const supabaseAnonKey = 'sb_publishable_9tyk3EMUSLUy3VkK9yypaQ_NWRYPmUl';
 
+// ✅ EXPORTAR para uso no ChatContext
 export const CLIENT_TOKEN_KEY = 'redoma_client_token';
-const CLIENT_JWT_KEY = 'redoma_client_jwt';
 
-const getClientToken = () => {
-  if (typeof window === 'undefined') return '';
-  return localStorage.getItem(CLIENT_TOKEN_KEY) ?? '';
-};
-
-const getClientJwt = () => {
-  if (typeof window === 'undefined') return '';
-  return localStorage.getItem(CLIENT_JWT_KEY) ?? '';
-};
-
-const withClientJwtFetch: typeof fetch = async (input, init) => {
+/**
+ * Fetch wrapper
+ * Injeta automaticamente o header `x-client-token`
+ * em TODAS as requests feitas pelo supabasePublic
+ */
+const withClientTokenFetch: typeof fetch = async (input, init) => {
   const headers = new Headers(init?.headers || {});
-  const jwt = getClientJwt();
+  const token = localStorage.getItem(CLIENT_TOKEN_KEY);
 
-  headers.set('apikey', supabaseAnonKey);
+  if (token) {
+    headers.set('x-client-token', token);
+  }
 
-  if (jwt) headers.set('Authorization', `Bearer ${jwt}`);
-
-  return fetch(input, { ...init, headers });
+  return fetch(input, {
+    ...init,
+    headers,
+  });
 };
 
+/**
+ * 1) Público (CLIENTE)
+ * - Não persiste sessão
+ * - Não interfere no login do suporte/admin
+ * - Sempre envia x-client-token → RLS funciona
+ */
 export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: false,
@@ -34,52 +38,15 @@ export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false,
   },
   global: {
-    fetch: withClientJwtFetch,
+    fetch: withClientTokenFetch,
   },
 });
 
 /**
- * Emite/reusa JWT do cliente via Edge Function
- * e aplica no HTTP + Realtime.
+ * 2) SUPORTE
+ * - Sessão própria
+ * - Não usa token customizado
  */
-export const ensureClientJwt = async () => {
-  if (typeof window === 'undefined') return '';
-
-  const existing = localStorage.getItem(CLIENT_JWT_KEY);
-  if (existing) {
-    // Realtime também precisa
-    supabasePublic.realtime.setAuth(existing);
-    return existing;
-  }
-
-  const client_token = getClientToken();
-  if (!client_token) throw new Error('missing client_token');
-
-  const res = await fetch(`${supabaseUrl}/functions/v1/issue-client-jwt`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: supabaseAnonKey,
-    },
-    body: JSON.stringify({ client_token }),
-  });
-
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'issue-client-jwt failed');
-
-  const jwt = data.token as string;
-  localStorage.setItem(CLIENT_JWT_KEY, jwt);
-
-  // aplica no Realtime
-  supabasePublic.realtime.setAuth(jwt);
-
-  // força reconectar (para garantir que o socket atual use o jwt)
-  try { supabasePublic.realtime.disconnect(); } catch {}
-  try { supabasePublic.realtime.connect(); } catch {}
-
-  return jwt;
-};
-
 export const supabaseSupport = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -89,6 +56,10 @@ export const supabaseSupport = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+/**
+ * 3) MASTER / ADMIN
+ * - Sessão própria e isolada
+ */
 export const supabaseMaster = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -97,3 +68,14 @@ export const supabaseMaster = createClient(supabaseUrl, supabaseAnonKey, {
     storageKey: 'redoma_master_auth',
   },
 });
+
+/**
+ * ✅ FUNÇÃO PARA REFRESH DO TOKEN REALTIME
+ * (Não é mais necessária, mas mantida para compatibilidade)
+ */
+export const refreshPublicRealtimeToken = async () => {
+  // No Supabase moderno, não precisa fazer refresh manual
+  // O client já gerencia isso automaticamente
+  // Mas deixamos a função para não quebrar imports
+  return Promise.resolve();
+};

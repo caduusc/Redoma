@@ -313,7 +313,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       community_id: communityId,
       status: 'open',
       claimed_by: null,
-      created_at: new Date().toISOString(),
       member_id: memberId ?? null,
       client_token: clientToken,
     };
@@ -359,7 +358,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       message_type: 'text' as const,
       text,
       client_token: clientToken,
-      created_at: new Date().toISOString(),
     };
 
     upsertMessage(payload as any);
@@ -414,7 +412,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       image_url: publicUrl,
       storage_path: path,
       client_token: clientToken,
-      created_at: new Date().toISOString(),
     };
 
     upsertMessage(payload as any);
