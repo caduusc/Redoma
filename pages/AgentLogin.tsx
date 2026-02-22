@@ -64,6 +64,19 @@ const AgentLogin: React.FC = () => {
         })
       );
 
+      // 4) Aguarda sessão ser persistida antes de navegar
+      //    (evita race condition no SupportGuard)
+      await new Promise<void>((resolve) => {
+        const { data: listener } = supabaseSupport.auth.onAuthStateChange((event, session) => {
+          if (session?.user?.id === userId) {
+            listener.subscription.unsubscribe();
+            resolve();
+          }
+        });
+        // Segurança: resolve após 2s mesmo sem evento
+        setTimeout(resolve, 2000);
+      });
+
       navigate('/agent/inbox');
     } catch (err) {
       console.error('Unexpected login error:', err);
