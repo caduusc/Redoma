@@ -17,17 +17,6 @@ const AgentInbox: React.FC = () => {
   const [filter, setFilter] = useState<ConversationStatus>('open');
   const navigate = useNavigate();
 
-  // ✅ Guard: exige sessão do Supabase SUPPORT + redoma_current_user (modo agente)
-  useEffect(() => {
-    const guard = async () => {
-      const { data } = await supabaseSupport.auth.getSession();
-      if (!data.session || !currentUser) {
-        navigate('/agent/login', { replace: true });
-      }
-    };
-    guard();
-  }, [currentUser, navigate]);
-
   const handleLogout = async () => {
     try {
       await supabaseSupport.auth.signOut();

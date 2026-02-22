@@ -2,26 +2,27 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
 import { supabaseSupport } from '../lib/supabase';
+import { useChat } from '../context/ChatContext';
 
 const AgentLogin: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useChat();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // 1) Login real (SUPPORT)
+      // 1) Login Supabase
       const { data, error } = await supabaseSupport.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        console.error('Supabase login error:', error);
         alert('E-mail ou senha inválidos.');
         return;
       }
@@ -33,7 +34,7 @@ const AgentLogin: React.FC = () => {
         return;
       }
 
-      // 2) Validação: usuário precisa estar na tabela support_users
+      // 2) Verifica permissão na tabela support_users
       const { data: supportUser, error: supportErr } = await supabaseSupport
         .from('support_users')
         .select('user_id')
@@ -41,7 +42,6 @@ const AgentLogin: React.FC = () => {
         .maybeSingle();
 
       if (supportErr) {
-        console.error('Support check error:', supportErr);
         await supabaseSupport.auth.signOut();
         alert('Erro ao validar permissão. Tente novamente.');
         return;
@@ -53,38 +53,15 @@ const AgentLogin: React.FC = () => {
         return;
       }
 
-      // 3) Marca como agente no app
-      localStorage.setItem(
-        'redoma_current_user',
-        JSON.stringify({
-          id: userId,
-          name: 'Atendente Redoma',
-          email,
-          role: 'agent',
-        })
-      );
+      // 3) Atualiza o contexto React — isso resolve o guard do AgentInbox imediatamente
+      login(email);
 
-      // 4) Aguarda sessão estar disponível no localStorage (funciona no PWA)
-      //    Faz polling em getSession() que é síncrono com o storage local
-      await new Promise<void>((resolve) => {
-        let attempts = 0;
-        const check = async () => {
-          const { data } = await supabaseSupport.auth.getSession();
-          if (data.session?.user?.id === userId) {
-            resolve();
-          } else if (attempts++ < 20) {
-            setTimeout(check, 150);
-          } else {
-            resolve(); // timeout após 3s
-          }
-        };
-        check();
-      });
-
+      // 4) Navega — currentUser já está setado no contexto, sem race condition
       navigate('/agent/inbox');
+
     } catch (err) {
       console.error('Unexpected login error:', err);
-      alert('Erro inesperado ao fazer login. Verifique o console.');
+      alert('Erro inesperado ao fazer login.');
     } finally {
       setLoading(false);
     }
