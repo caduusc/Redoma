@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -17,6 +18,7 @@ import {
   getOrCreateClientToken,
 } from '../lib/supabase';
 import { uploadChatImage } from '../lib/uploadChatImage';
+import { useAgentNotifications } from '../src/hooks/useAgentNotifications';
 
 interface ChatContextType {
   conversations: Conversation[];
@@ -45,6 +47,13 @@ interface ChatContextType {
   getMessages: (conversationId: string) => Message[];
 
   setActiveConversationId: (id: string | null) => void;
+
+  // Notificações
+  notificationPermission: 'default' | 'granted' | 'denied';
+  notificationsEnabled: boolean;
+  notificationsSupported: boolean;
+  requestNotificationPermission: () => Promise<boolean>;
+  disableNotifications: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -76,6 +85,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const isAgent = useMemo(() => !!currentUser, [currentUser]);
 
+  const {
+    permission: notificationPermission,
+    enabled: notificationsEnabled,
+    isSupported: notificationsSupported,
+    requestPermission: requestNotificationPermission,
+    disableNotifications,
+    notify,
+  } = useAgentNotifications();
+
+  // Ref para rastrear IDs de mensagens já notificadas (evita duplicatas)
+  const notifiedMsgIds = useRef<Set<string>>(new Set());
+
   const upsertConversation = useCallback((conv: Conversation) => {
     setConversations((prev) => {
       const exists = prev.some((c) => c.id === conv.id);
@@ -104,7 +125,24 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       return next;
     });
-  }, []);
+
+    // 🔔 Notifica o agente quando chega mensagem do cliente
+    if (
+      isAgent &&
+      msg.sender_type === 'client' &&
+      !notifiedMsgIds.current.has(msg.id)
+    ) {
+      notifiedMsgIds.current.add(msg.id);
+      const preview =
+        msg.message_type === 'image'
+          ? '📷 Imagem recebida'
+          : msg.text?.slice(0, 80) || 'Nova mensagem';
+      notify({
+        title: '💬 Nova mensagem de cliente',
+        body: preview,
+      });
+    }
+  }, [isAgent, notify]);
 
   const removeOptimisticMessage = useCallback((id: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -444,6 +482,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         getConversation,
         getMessages,
         setActiveConversationId,
+        notificationPermission,
+        notificationsEnabled,
+        notificationsSupported,
+        requestNotificationPermission,
+        disableNotifications,
       }}
     >
       {children}

@@ -3,11 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import ChatLayout from '../components/ChatLayout';
 import { ConversationStatus, Conversation } from '../types';
-import { MessageSquare, Clock, User, LogOut } from 'lucide-react';
+import { MessageSquare, Clock, User, LogOut, Bell, BellOff } from 'lucide-react';
 import { supabaseSupport } from '../lib/supabase';
 
 const AgentInbox: React.FC = () => {
-  const { conversations, messages, logout, currentUser } = useChat();
+  const { conversations, messages, logout, currentUser,
+    notificationPermission,
+    notificationsEnabled,
+    notificationsSupported,
+    requestNotificationPermission,
+    disableNotifications,
+  } = useChat();
   const [filter, setFilter] = useState<ConversationStatus>('open');
   const navigate = useNavigate();
 
@@ -68,13 +74,41 @@ const AgentInbox: React.FC = () => {
       title="Gestão de Atendimentos"
       isAgent
       actions={
-        <button
-          onClick={handleLogout}
-          className="p-2 hover:bg-white/10 rounded-full text-white/80"
-          title="Sair"
-        >
-          <LogOut size={20} />
-        </button>
+        <div className="flex items-center gap-1">
+          {/* Botão de notificações */}
+          {notificationsSupported && (
+            notificationPermission === 'denied' ? (
+              <div className="text-[9px] font-bold text-white/40 uppercase tracking-wider px-2 hidden sm:block">
+                Notif. bloqueadas
+              </div>
+            ) : notificationsEnabled ? (
+              <button
+                onClick={disableNotifications}
+                className="p-2 hover:bg-white/10 rounded-full text-white/80"
+                title="Desativar notificações"
+              >
+                <Bell size={20} className="text-yellow-300" />
+              </button>
+            ) : (
+              <button
+                onClick={requestNotificationPermission}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider transition-all"
+                title="Ativar notificações"
+              >
+                <BellOff size={14} />
+                <span className="hidden sm:inline">Ativar alertas</span>
+              </button>
+            )
+          )}
+
+          <button
+            onClick={handleLogout}
+            className="p-2 hover:bg-white/10 rounded-full text-white/80"
+            title="Sair"
+          >
+            <LogOut size={20} />
+          </button>
+        </div>
       }
     >
       <div className="flex flex-col h-full bg-white">
