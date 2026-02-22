@@ -460,7 +460,7 @@ const ClientStart: React.FC = () => {
   /* ======================= RENDER ======================= */
 
   const renderIdentityStep = () => (
-    <form onSubmit={handleSubmitIdentity} className="p-10 space-y-6 pt-6" autoComplete="on">
+    <form onSubmit={handleSubmitIdentity} className="p-6 space-y-5 pt-4" autoComplete="on">
       <div className="space-y-2">
         <label
           htmlFor="fullName"
@@ -541,7 +541,7 @@ const ClientStart: React.FC = () => {
   );
 
   const renderCommunityStep = () => (
-    <div className="p-10 space-y-6 pt-6">
+    <div className="p-6 space-y-5 pt-4">
       {/* Saudação */}
       <div>
         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
@@ -702,7 +702,7 @@ const ClientStart: React.FC = () => {
         </div>
       </div>
 
-      <div className="px-10 pb-6 pt-0 flex justify-between items-center border-t border-slate-100 mt-4">
+      <div className="px-6 pb-5 pt-0 flex justify-between items-center border-t border-slate-100 mt-4">
         <button
           type="button"
           onClick={() => setStep('IDENTITY')}
@@ -718,22 +718,22 @@ const ClientStart: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-redoma-light flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-redoma-light px-4 py-8 relative overflow-x-hidden">
       {/* fundos decorativos */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
 
       {/* card principal */}
-      <div className="w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl shadow-redoma-dark/5 overflow-hidden relative z-10 border border-slate-100">
-        <div className="p-10 bg-redoma-dark text-white text-center">
-          <Logo size={80} className="mb-6 drop-shadow-xl" />
+      <div className="w-full max-w-md mx-auto bg-white rounded-[2rem] shadow-2xl shadow-redoma-dark/5 overflow-hidden relative z-10 border border-slate-100">
+        <div className="p-6 bg-redoma-dark text-white text-center">
+          <Logo size={60} className="mb-4 drop-shadow-xl" />
           <h1 className="text-3xl font-bold tracking-tight">Redoma Tech</h1>
           <p className="text-redoma-glow text-sm mt-3 font-medium">
             Crescimento Inteligente para comunidades
           </p>
         </div>
 
-        <div className="px-10 py-6 border-b border-slate-50 bg-slate-50/30">
+        <div className="px-6 py-4 border-b border-slate-50 bg-slate-50/30">
           <button
             type="button"
             onClick={() => navigate('/client/providers')}
@@ -748,7 +748,7 @@ const ClientStart: React.FC = () => {
       </div>
 
       {/* footer de navegação */}
-      <div className="mt-8 flex gap-6 relative z-10">
+      <div className="mt-6 flex gap-6 justify-center relative z-10 pb-4">
         <button
           type="button"
           onClick={() => navigate('/agent/login')}
