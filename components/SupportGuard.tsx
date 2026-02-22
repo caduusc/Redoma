@@ -11,17 +11,27 @@ const SupportGuard: React.FC<Props> = ({ children, redirectTo = '/agent/login' }
   useEffect(() => {
     (async () => {
       try {
-        const { data: userData } = await supabaseSupport.auth.getUser();
-        const user = userData?.user;
-        if (!user) return setOk(false);
+        // 1) Verificação rápida via localStorage (sem rede) — crucial no PWA
+        const { data: sessionData } = await supabaseSupport.auth.getSession();
+        const session = sessionData?.session;
 
+        if (!session?.user) {
+          setOk(false);
+          return;
+        }
+
+        const userId = session.user.id;
+
+        // 2) Verifica permissão na tabela support_users
         const { data, error } = await supabaseSupport
           .from('support_users')
           .select('user_id')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
           .maybeSingle();
 
         setOk(!error && !!data);
+      } catch {
+        setOk(false);
       } finally {
         setLoading(false);
       }

@@ -53,7 +53,7 @@ const AgentLogin: React.FC = () => {
         return;
       }
 
-      // 3) Marca como agente no app (mantém seu padrão)
+      // 3) Marca como agente no app
       localStorage.setItem(
         'redoma_current_user',
         JSON.stringify({
@@ -64,17 +64,21 @@ const AgentLogin: React.FC = () => {
         })
       );
 
-      // 4) Aguarda sessão ser persistida antes de navegar
-      //    (evita race condition no SupportGuard)
+      // 4) Aguarda sessão estar disponível no localStorage (funciona no PWA)
+      //    Faz polling em getSession() que é síncrono com o storage local
       await new Promise<void>((resolve) => {
-        const { data: listener } = supabaseSupport.auth.onAuthStateChange((event, session) => {
-          if (session?.user?.id === userId) {
-            listener.subscription.unsubscribe();
+        let attempts = 0;
+        const check = async () => {
+          const { data } = await supabaseSupport.auth.getSession();
+          if (data.session?.user?.id === userId) {
             resolve();
+          } else if (attempts++ < 20) {
+            setTimeout(check, 150);
+          } else {
+            resolve(); // timeout após 3s
           }
-        });
-        // Segurança: resolve após 2s mesmo sem evento
-        setTimeout(resolve, 2000);
+        };
+        check();
       });
 
       navigate('/agent/inbox');
