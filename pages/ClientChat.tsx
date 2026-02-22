@@ -1,183 +1,237 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useChat } from '../context/ChatContext';
 import ChatLayout from '../components/ChatLayout';
 import MessageList from '../components/MessageList';
 import MessageInput from '../components/MessageInput';
-import { supabasePublic } from '../lib/supabase';
-import { useChat } from '../context/ChatContext';
-import { LayoutGrid } from 'lucide-react';
+import { Hand, CheckCircle2 } from 'lucide-react';
+import { supabaseSupport, supabaseMaster } from '../lib/supabase';
 
-const ClientChat: React.FC = () => {
+const AgentChat: React.FC = () => {
+  const { conversationId } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
-  
-  // ✅ CORREÇÃO: Usar as propriedades corretas do contexto
+
   const {
     getConversation,
     getMessages,
     addMessage,
     sendImageMessage,
-    setActiveConversationId,
+    claimConversation,
+    closeConversation,
+    currentUser,
   } = useChat();
 
+  // Nome do membro (cliente) associado à conversa
+  const [memberName, setMemberName] = useState<string | null>(null);
+  // Nome da comunidade associada à conversa
   const [communityName, setCommunityName] = useState<string | null>(null);
-  const [loadingTitle, setLoadingTitle] = useState<boolean>(true);
 
-  // ✅ CORREÇÃO: Pegar o ID da conversa ativa do localStorage
-  const activeConvId = localStorage.getItem('redoma_active_conv');
-  
-  // ✅ CORREÇÃO: Buscar a conversa usando a função do contexto
-  const conversation = activeConvId ? getConversation(activeConvId) : undefined;
-  
-  // ✅ CORREÇÃO: Buscar as mensagens usando a função do contexto
-  const messages = activeConvId ? getMessages(activeConvId) : [];
-
-  const [seenAt, setSeenAt] = useState<number>(Date.now());
-
-  // Marca last_client_seen_at no banco ao entrar no chat
+  // Guarda de sessão do agente
   useEffect(() => {
-    if (!conversation?.id) return;
+    const guard = async () => {
+      const { data } = await supabaseSupport.auth.getSession();
+      if (!data.session || !currentUser) {
+        navigate('/agent/login', { replace: true });
+      }
+    };
+    guard();
+  }, [currentUser, navigate]);
+
+  // Atualiza last_agent_seen_at periodicamente
+  useEffect(() => {
+    if (!conversationId) return;
 
     const markSeen = async () => {
-      const now = new Date().toISOString();
-      await supabasePublic
+      const { error } = await supabaseSupport
         .from('conversations')
-        .update({ last_client_seen_at: now })
-        .eq('id', conversation.id);
-      setSeenAt(Date.now());
+        .update({ last_agent_seen_at: new Date().toISOString() })
+        .eq('id', conversationId);
+
+      if (error) console.error('[agent mark seen]', error);
     };
 
     markSeen();
-  }, [conversation?.id]);
+    const t = setInterval(markSeen, 10000);
+    return () => clearInterval(t);
+  }, [conversationId]);
 
-  // ✅ CORREÇÃO: só mostra "nova resposta" se chegou msg do agente DEPOIS do último seen
-  const hasUnreadFromAgent = useMemo(() => {
-    if (!messages.length) return false;
-    return messages.some(
-      (m) =>
-        m.sender_type === 'agent' &&
-        new Date(m.created_at).getTime() > seenAt
-    );
-  }, [messages, seenAt]);
+  if (!conversationId) return null;
 
-  // ✅ fallback: tenta pegar o communityId do localStorage (setado no ClientStart)
-  const communityIdForTitle = useMemo(() => {
-    return (
-      conversation?.community_id ||
-      localStorage.getItem('redoma_client_cid') ||
-      null
-    );
+  const conversation = getConversation(conversationId);
+  const messages = getMessages(conversationId);
+
+  // Busca o nome da comunidade ligada à conversa
+  useEffect(() => {
+    const fetchCommunityName = async () => {
+      try {
+        if (!conversation?.community_id) {
+          setCommunityName(null);
+          return;
+        }
+
+        const { data, error } = await supabaseMaster
+          .from('communities')
+          .select('name')
+          .eq('id', conversation.community_id)
+          .maybeSingle();
+
+        if (error) {
+          console.error('[AgentChat] erro ao buscar comunidade', error);
+          setCommunityName(null);
+          return;
+        }
+
+        setCommunityName(data?.name ?? null);
+      } catch (err) {
+        console.error('[AgentChat] fatal ao buscar comunidade', err);
+        setCommunityName(null);
+      }
+    };
+
+    fetchCommunityName();
   }, [conversation?.community_id]);
 
-  // 🔥 resolve communityId -> name (para o título)
+  // Busca o nome do membro ligado à conversa (se existir memberId)
   useEffect(() => {
-    const cid = communityIdForTitle;
+    const fetchMemberName = async () => {
+      try {
+        if (!conversation?.memberId) {
+          setMemberName(null);
+          return;
+        }
 
-    if (!cid) {
-      setCommunityName(null);
-      setLoadingTitle(false);
-      return;
-    }
+        const { data, error } = await supabaseSupport
+          .from('members')
+          .select('full_name')
+          .eq('member_id', conversation.memberId)
+          .maybeSingle();
 
-    let cancelled = false;
-    setLoadingTitle(true);
+        if (error) {
+          console.error('[AgentChat] erro ao buscar nome do membro', error);
+          setMemberName(null);
+          return;
+        }
 
-    (async () => {
-      const { data, error } = await supabasePublic
-        .from('communities')
-        .select('name')
-        .eq('id', cid)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      if (error) {
-        console.error('[ClientChat] fetch community name error', error);
-        setCommunityName(null);
-        setLoadingTitle(false);
-        return;
+        setMemberName(data?.full_name ?? null);
+      } catch (err) {
+        console.error('[AgentChat] fatal ao buscar membro', err);
+        setMemberName(null);
       }
-
-      setCommunityName(data?.name || null);
-      setLoadingTitle(false);
-    })();
-
-    return () => {
-      cancelled = true;
     };
-  }, [communityIdForTitle]);
 
-  const titleLabel = useMemo(() => {
-    if (communityName) return communityName;
-    if (loadingTitle) return 'Carregando...';
-    if (communityIdForTitle) return communityIdForTitle; // fallback final (ID)
-    return 'Chat';
-  }, [communityName, loadingTitle, communityIdForTitle]);
+    fetchMemberName();
+  }, [conversation?.memberId]);
 
-  // ✅ CORREÇÃO: handleSend agora usa addMessage com conversationId e senderType corretos
+  if (!conversation) return null;
+
   const handleSend = async (text: string) => {
-    if (!conversation?.id) return;
-    await addMessage(conversation.id, text, 'client');
+    await addMessage(conversationId, text, 'agent');
   };
 
-  // ✅ CORREÇÃO: handleSendImage agora usa sendImageMessage com conversationId e senderType corretos
   const handleSendImage = async (file: File) => {
-    if (!conversation?.id) return;
-    await sendImageMessage(conversation.id, file, 'client');
+    await sendImageMessage(conversationId, file, 'agent');
   };
 
-  const handleBack = () => {
-    setActiveConversationId(null);
-    localStorage.removeItem('redoma_active_conv');
-    // mantém redoma_client_cid pra título fallback funcionar em refresh,
-    // mas se quiser limpar também, descomenta a linha abaixo:
-    // localStorage.removeItem('redoma_client_cid');
-    navigate('/client/start');
+  const handleClaim = async () => {
+    try {
+      await claimConversation(conversationId);
+    } catch (e: any) {
+      alert(e?.message || 'Erro ao assumir atendimento');
+    }
   };
+
+  const handleClose = async () => {
+    await closeConversation(conversationId);
+    navigate('/agent/inbox', { replace: true });
+  };
+
+  const canType = conversation.status === 'claimed';
+  const isOpen = conversation.status === 'open';
+
+  // Título = nome do cliente; fallback = 'Atendimento'
+  const title = memberName || 'Atendimento';
+  // Subtítulo = nome da comunidade; fallback = ID ou 'Painel Administrativo'
+  const subtitle = communityName
+    ? `Comunidade: ${communityName}`
+    : conversation.community_id
+    ? `Comunidade: ${conversation.community_id}`
+    : 'Painel Administrativo';
 
   return (
     <ChatLayout
-      title={`Chat: ${titleLabel}`}
+      title={title}
+      subtitle={subtitle}
       showBack
-      onBack={handleBack}
+      onBack={() => navigate('/agent/inbox')}
+      isAgent
       actions={
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate('/client/providers')}
-            className="flex items-center gap-1.5 text-[10px] font-bold bg-white/10 text-white px-3 py-1.5 rounded-full hover:bg-white/20 transition-colors border border-white/10 uppercase tracking-widest"
-            title="Ver Fornecedores"
-          >
-            <LayoutGrid size={14} />
-            <span className="hidden xs:inline">Benefícios</span>
-          </button>
+        <div className="flex gap-2">
+          {conversation.status === 'open' && (
+            <button
+              onClick={handleClaim}
+              className="flex items-center gap-1.5 bg-redoma-steel text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-redoma-glow transition-colors shadow-lg shadow-redoma-dark/20"
+            >
+              <Hand size={14} />
+              <span>Assumir</span>
+            </button>
+          )}
+          {conversation.status === 'claimed' && (
+            <button
+              onClick={handleClose}
+              className="flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-700 transition-colors shadow-lg"
+            >
+              <CheckCircle2 size={14} />
+              <span>Finalizar</span>
+            </button>
+          )}
         </div>
       }
     >
-      <div className="flex flex-col h-full min-h-0">
-        <div className="bg-indigo-50 border-b border-indigo-100 px-4 py-2 text-[10px] text-indigo-600 font-bold text-center uppercase tracking-[0.15em] flex items-center justify-center gap-3">
-          <span>Suporte Redoma Ativo</span>
-
-          {hasUnreadFromAgent && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-[9px] font-extrabold tracking-[0.18em]">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              Nova resposta
-            </span>
-          )}
-        </div>
-
+      {/* Wrapper garante que existe "área de mensagens" + "footer input" */}
+      <div className="flex flex-col h-full min-h-0 relative">
+        {/* área scrollável */}
         <div className="flex-1 min-h-0">
-          <MessageList messages={messages} currentType="client" conversation={conversation} />
+          <MessageList
+            messages={messages}
+            currentType="agent"
+            conversation={conversation}
+          />
         </div>
 
+        {/* footer sempre visível */}
         <div className="shrink-0 border-t border-slate-100 bg-white">
           <MessageInput
             onSend={handleSend}
             onSendImage={handleSendImage}
-            disabled={conversation?.status === 'closed'}
+            disabled={!canType}
           />
         </div>
+
+        {isOpen && (
+          <div className="absolute inset-0 bg-redoma-dark/20 backdrop-blur-[2px] flex items-center justify-center p-6 z-20">
+            <div className="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm border border-slate-100">
+              <div className="w-16 h-16 bg-redoma-dark/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Hand size={32} className="text-redoma-dark" />
+              </div>
+              <h3 className="font-extrabold text-redoma-dark text-lg mb-3">
+                Novo Chamado
+              </h3>
+              <p className="text-sm text-slate-500 mb-8 leading-relaxed">
+                Esta comunidade aguarda um atendente. Assuma agora para iniciar o
+                diálogo.
+              </p>
+              <button
+                onClick={handleClaim}
+                className="w-full bg-redoma-dark text-white py-4 rounded-2xl font-bold hover:bg-redoma-navy transition-all shadow-xl shadow-redoma-dark/20 uppercase tracking-widest text-xs"
+              >
+                Atender Cliente
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </ChatLayout>
   );
 };
 
-export default ClientChat;
+export default AgentChat;
