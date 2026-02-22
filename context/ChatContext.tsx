@@ -25,6 +25,16 @@ interface ChatContextType {
   messages: Message[];
   currentUser: User | null;
 
+  // Popup interno (toast) para avisar o atendente de novas mensagens
+  agentToast: {
+    id: string;
+    title: string;
+    body: string;
+    conversationId?: string;
+    createdAt: number;
+  } | null;
+  dismissAgentToast: () => void;
+
   login: (email: string) => void;
   logout: () => void;
 
@@ -83,6 +93,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.getItem('redoma_active_conv')
   );
 
+  // Toast (popup interno) para agente
+  const [agentToast, setAgentToast] = useState<ChatContextType['agentToast']>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
   const isAgent = useMemo(() => !!currentUser, [currentUser]);
 
   const {
@@ -137,12 +151,29 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         msg.message_type === 'image'
           ? '📷 Imagem recebida'
           : msg.text?.slice(0, 80) || 'Nova mensagem';
+
+      // ✅ Popup interno (independe de permissão do navegador)
+      // Só mostra se o agente NÃO está dentro da conversa ativa
+      if (!activeConvId || msg.conversation_id !== activeConvId) {
+        if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+        setAgentToast({
+          id: msg.id,
+          title: '💬 Nova mensagem de cliente',
+          body: preview,
+          conversationId: msg.conversation_id,
+          createdAt: Date.now(),
+        });
+        toastTimerRef.current = window.setTimeout(() => {
+          setAgentToast(null);
+          toastTimerRef.current = null;
+        }, 7000);
+      }
       notify({
         title: '💬 Nova mensagem de cliente',
         body: preview,
       });
     }
-  }, [isAgent, notify]);
+  }, [isAgent, notify, activeConvId]);
 
   const removeOptimisticMessage = useCallback((id: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -152,6 +183,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (id) localStorage.setItem('redoma_active_conv', id);
     else localStorage.removeItem('redoma_active_conv');
     setActiveConvIdState(id);
+  }, []);
+
+  const dismissAgentToast = useCallback(() => {
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = null;
+    }
+    setAgentToast(null);
   }, []);
 
   useEffect(() => {
@@ -472,6 +511,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         conversations,
         messages,
         currentUser,
+        agentToast,
+        dismissAgentToast,
         login,
         logout,
         createConversation,

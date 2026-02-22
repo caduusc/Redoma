@@ -21,6 +21,7 @@ import AdminCommunities from './pages/AdminCommunities';
 
 import AdminGuard from './components/AdminGuard';
 import SupportGuard from './components/SupportGuard';
+import AgentToastContainer from './components/AgentToastContainer';
 
 const App: React.FC = () => {
   return (
@@ -28,6 +29,7 @@ const App: React.FC = () => {
       <ProviderProvider>
         <CommunityProvider>
           <Router>
+            <AgentToastContainer />
             <Routes>
               {/* Client Routes (sem atrito) */}
               <Route path="/client/start" element={<ClientStart />} />
