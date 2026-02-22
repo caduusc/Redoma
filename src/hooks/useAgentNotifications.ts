@@ -1,141 +1,131 @@
 /**
  * useAgentNotifications
  *
- * Gerencia Web Push Notifications nativas do navegador para atendentes.
+ * Notificações push reais para atendentes via Service Worker.
+ * - Popup nativo no mobile (mesmo com app em segundo plano)
+ * - Funciona como app instalado (PWA)
  * - 100% gratuito, sem serviços externos
- * - Funciona em desktop e mobile (PWA)
- * - O atendente precisa conceder permissão uma única vez
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-export type NotificationPermission = 'default' | 'granted' | 'denied';
+export type NotifPermission = 'default' | 'granted' | 'denied' | 'unsupported';
 
-const NOTIFICATION_ENABLED_KEY = 'redoma_notifications_enabled';
+const ENABLED_KEY = 'redoma_notifications_enabled';
+const SW_PATH = '/sw.js';
 
-// Som de notificação via AudioContext (sem arquivo externo)
-function playNotificationSound() {
+// Som curto via AudioContext
+function playSound() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = ctx.createOscillator();
-    const gainNode = ctx.createGain();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.4);
+  } catch {}
+}
 
-    oscillator.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    oscillator.type = 'sine';
-    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.15);
-
-    gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-
-    oscillator.start(ctx.currentTime);
-    oscillator.stop(ctx.currentTime + 0.3);
-  } catch {
-    // silently ignore — AudioContext pode não estar disponível
+async function getOrRegisterSW(): Promise<ServiceWorkerRegistration | null> {
+  if (!('serviceWorker' in navigator)) return null;
+  try {
+    const existing = await navigator.serviceWorker.getRegistration('/');
+    if (existing) return existing;
+    return await navigator.serviceWorker.register(SW_PATH, { scope: '/' });
+  } catch (e) {
+    console.warn('[SW] registro falhou', e);
+    return null;
   }
 }
 
 export function useAgentNotifications() {
-  const [permission, setPermission] = useState<NotificationPermission>(() => {
-    if (typeof Notification === 'undefined') return 'denied';
-    return Notification.permission as NotificationPermission;
+  const isSupported =
+    typeof window !== 'undefined' &&
+    'Notification' in window &&
+    'serviceWorker' in navigator;
+
+  const [permission, setPermission] = useState<NotifPermission>(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+    return Notification.permission as NotifPermission;
   });
 
   const [enabled, setEnabled] = useState(() => {
-    return localStorage.getItem(NOTIFICATION_ENABLED_KEY) === 'true';
+    return localStorage.getItem(ENABLED_KEY) === 'true';
   });
 
-  // Sincroniza estado com permissão real do browser
+  const swRegRef = useRef<ServiceWorkerRegistration | null>(null);
+
   useEffect(() => {
-    if (typeof Notification === 'undefined') return;
-    setPermission(Notification.permission as NotificationPermission);
-  }, []);
+    if (!isSupported) return;
+    getOrRegisterSW().then((reg) => { swRegRef.current = reg; });
+    setPermission(Notification.permission as NotifPermission);
+  }, [isSupported]);
 
-  /**
-   * Solicita permissão ao usuário (deve ser chamado por interação do usuário)
-   */
   const requestPermission = useCallback(async (): Promise<boolean> => {
-    if (typeof Notification === 'undefined') return false;
-
+    if (!isSupported) return false;
     const result = await Notification.requestPermission();
-    setPermission(result as NotificationPermission);
+    setPermission(result as NotifPermission);
+    if (result !== 'granted') return false;
 
-    if (result === 'granted') {
-      setEnabled(true);
-      localStorage.setItem(NOTIFICATION_ENABLED_KEY, 'true');
-      // Mostra uma notificação de teste
-      new Notification('✅ Notificações ativadas!', {
+    setEnabled(true);
+    localStorage.setItem(ENABLED_KEY, 'true');
+
+    const reg = swRegRef.current ?? (await getOrRegisterSW());
+    swRegRef.current = reg;
+
+    if (reg) {
+      await reg.showNotification('Alertas ativados — Redoma', {
         body: 'Você receberá alertas quando clientes enviarem mensagens.',
-        icon: '/favicon.ico',
-        tag: 'redoma-test',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: 'redoma-setup',
+        vibrate: [100, 50, 100],
+      } as any);
+    } else {
+      new Notification('Alertas ativados — Redoma', {
+        body: 'Você receberá alertas de novas mensagens.',
       });
-      return true;
     }
+    return true;
+  }, [isSupported]);
 
-    return false;
-  }, []);
-
-  /**
-   * Desativa notificações (sem revogar permissão do browser)
-   */
   const disableNotifications = useCallback(() => {
     setEnabled(false);
-    localStorage.setItem(NOTIFICATION_ENABLED_KEY, 'false');
+    localStorage.setItem(ENABLED_KEY, 'false');
   }, []);
 
-  /**
-   * Dispara uma notificação para o atendente
-   */
   const notify = useCallback(
-    ({
-      title,
-      body,
-      onClick,
-    }: {
-      title: string;
-      body: string;
-      onClick?: () => void;
-    }) => {
+    ({ title, body }: { title: string; body: string }) => {
       if (!enabled) return;
-      if (typeof Notification === 'undefined') return;
+      if (!isSupported) return;
       if (Notification.permission !== 'granted') return;
 
-      // Não notifica se a aba está visível e em foco
-      if (document.visibilityState === 'visible' && document.hasFocus()) {
-        // Apenas toca o som quando o app está em foco
-        playNotificationSound();
-        return;
-      }
+      playSound();
 
-      playNotificationSound();
-
-      const notification = new Notification(title, {
-        body,
-        icon: '/favicon.ico',
-        badge: '/favicon.ico',
-        tag: 'redoma-message',
-        renotify: true,
-      });
-
-      if (onClick) {
-        notification.onclick = () => {
-          window.focus();
-          notification.close();
-          onClick();
-        };
+      const reg = swRegRef.current;
+      if (reg) {
+        reg.showNotification(title, {
+          body,
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          tag: 'redoma-message',
+          renotify: true,
+          vibrate: [200, 100, 200],
+          data: { url: window.location.origin + '/#/agent/inbox' },
+        } as any);
+      } else {
+        if (document.visibilityState === 'visible' && document.hasFocus()) return;
+        new Notification(title, { body, icon: '/icon-192.png', tag: 'redoma-message' });
       }
     },
-    [enabled]
+    [enabled, isSupported]
   );
 
-  return {
-    permission,
-    enabled,
-    requestPermission,
-    disableNotifications,
-    notify,
-    isSupported: typeof Notification !== 'undefined',
-  };
+  return { permission, enabled, isSupported, requestPermission, disableNotifications, notify };
 }

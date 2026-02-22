@@ -75,28 +75,34 @@ const AgentInbox: React.FC = () => {
       isAgent
       actions={
         <div className="flex items-center gap-1">
-          {/* Botão de notificações */}
+          {/* Botão de notificações — sempre visível */}
           {notificationsSupported && (
             notificationPermission === 'denied' ? (
-              <div className="text-[9px] font-bold text-white/40 uppercase tracking-wider px-2 hidden sm:block">
-                Notif. bloqueadas
-              </div>
+              <button
+                onClick={() => alert('Notificações bloqueadas.\nPara ativar: Configurações do navegador → Notificações → Permitir para este site.')}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-red-500/20 text-red-300 text-[9px] font-bold uppercase tracking-wider"
+                title="Notificações bloqueadas — toque para instruções"
+              >
+                <BellOff size={14} />
+                <span className="hidden sm:inline">Bloqueado</span>
+              </button>
             ) : notificationsEnabled ? (
               <button
                 onClick={disableNotifications}
-                className="p-2 hover:bg-white/10 rounded-full text-white/80"
-                title="Desativar notificações"
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-yellow-400/20 hover:bg-yellow-400/30 text-yellow-300 transition-all"
+                title="Alertas ativos — toque para desativar"
               >
-                <Bell size={20} className="text-yellow-300" />
+                <Bell size={16} className="text-yellow-300" />
+                <span className="text-[9px] font-bold uppercase tracking-wider hidden sm:inline">Ativo</span>
               </button>
             ) : (
               <button
                 onClick={requestNotificationPermission}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold uppercase tracking-wider transition-all"
-                title="Ativar notificações"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-[10px] font-bold uppercase tracking-wider transition-all border border-white/20"
+                title="Ativar alertas de mensagem"
               >
                 <BellOff size={14} />
-                <span className="hidden sm:inline">Ativar alertas</span>
+                <span>Alertas</span>
               </button>
             )
           )}
