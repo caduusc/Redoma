@@ -23,6 +23,8 @@ const AgentChat: React.FC = () => {
 
   // Nome do membro (cliente) associado à conversa
   const [memberName, setMemberName] = useState<string | null>(null);
+  // Nome da comunidade associada à conversa
+  const [communityName, setCommunityName] = useState<string | null>(null);
 
   // Guarda de sessão do agente
   useEffect(() => {
@@ -58,11 +60,49 @@ const AgentChat: React.FC = () => {
   const conversation = getConversation(conversationId);
   const messages = getMessages(conversationId);
 
-  // Busca o nome do membro ligado à conversa (se existir memberId)
+  // Busca o nome da comunidade ligada à conversa
+  useEffect(() => {
+    const fetchCommunityName = async () => {
+      try {
+        if (!conversation?.community_id) {
+          setCommunityName(null);
+          return;
+        }
+
+        const { data, error } = await supabaseSupport
+          .from('communities')
+          .select('name')
+          .eq('id', conversation.community_id)
+          .maybeSingle();
+
+        if (error) {
+          console.error('[AgentChat] erro ao buscar comunidade', error);
+          setCommunityName(null);
+          return;
+        }
+
+        setCommunityName(data?.name ?? null);
+      } catch (err) {
+        console.error('[AgentChat] fatal ao buscar comunidade', err);
+        setCommunityName(null);
+      }
+    };
+
+    fetchCommunityName();
+  }, [conversation?.community_id]);
+
+  // Busca o nome do membro ligado à conversa (se existir member_id)
   useEffect(() => {
     const fetchMemberName = async () => {
       try {
-        if (!conversation?.memberId) {
+        // Usa member_name direto se já vier na conversa
+        if (conversation?.member_name) {
+          setMemberName(conversation.member_name);
+          return;
+        }
+
+        // Senão busca pelo member_id (campo correto do tipo)
+        if (!conversation?.member_id) {
           setMemberName(null);
           return;
         }
@@ -70,7 +110,7 @@ const AgentChat: React.FC = () => {
         const { data, error } = await supabaseSupport
           .from('members')
           .select('full_name')
-          .eq('member_id', conversation.memberId)
+          .eq('member_id', conversation.member_id)
           .maybeSingle();
 
         if (error) {
@@ -87,7 +127,7 @@ const AgentChat: React.FC = () => {
     };
 
     fetchMemberName();
-  }, [conversation?.memberId]);
+  }, [conversation?.member_id, conversation?.member_name]);
 
   if (!conversation) return null;
 
@@ -115,10 +155,12 @@ const AgentChat: React.FC = () => {
   const canType = conversation.status === 'claimed';
   const isOpen = conversation.status === 'open';
 
-  // Título = nome do cliente; fallback = comunidade
-  const title = memberName || conversation.community_id || 'Atendimento';
-  // Subtítulo = comunidade
-  const subtitle = conversation.community_id
+  // Título = nome do cliente; fallback = 'Atendimento'
+  const title = memberName || 'Atendimento';
+  // Subtítulo = nome da comunidade; fallback = ID ou 'Painel Administrativo'
+  const subtitle = communityName
+    ? `Comunidade: ${communityName}`
+    : conversation.community_id
     ? `Comunidade: ${conversation.community_id}`
     : 'Painel Administrativo';
 
