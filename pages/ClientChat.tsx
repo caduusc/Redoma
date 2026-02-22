@@ -31,13 +31,33 @@ const ClientChat: React.FC = () => {
   // ✅ CORREÇÃO: Buscar as mensagens usando a função do contexto
   const messages = activeConvId ? getMessages(activeConvId) : [];
 
-  // ✅ CORREÇÃO: Calcular se há mensagens não lidas do agente
+  const [seenAt, setSeenAt] = useState<number>(Date.now());
+
+  // Marca last_client_seen_at no banco ao entrar no chat
+  useEffect(() => {
+    if (!conversation?.id) return;
+
+    const markSeen = async () => {
+      const now = new Date().toISOString();
+      await supabasePublic
+        .from('conversations')
+        .update({ last_client_seen_at: now })
+        .eq('id', conversation.id);
+      setSeenAt(Date.now());
+    };
+
+    markSeen();
+  }, [conversation?.id]);
+
+  // ✅ CORREÇÃO: só mostra "nova resposta" se chegou msg do agente DEPOIS do último seen
   const hasUnreadFromAgent = useMemo(() => {
     if (!messages.length) return false;
-    // Verifica se a última mensagem é do agente
-    const lastMsg = messages[messages.length - 1];
-    return lastMsg?.sender_type === 'agent';
-  }, [messages]);
+    return messages.some(
+      (m) =>
+        m.sender_type === 'agent' &&
+        new Date(m.created_at).getTime() > seenAt
+    );
+  }, [messages, seenAt]);
 
   // ✅ fallback: tenta pegar o communityId do localStorage (setado no ClientStart)
   const communityIdForTitle = useMemo(() => {
