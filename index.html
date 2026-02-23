@@ -4,10 +4,7 @@
     <meta charset="UTF-8" />
 
     <!-- Viewport mobile + safe-area (iPhone notch) -->
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
-    />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
     <title>Redoma Chat</title>
     <meta name="description" content="Redoma Chat" />
@@ -18,25 +15,31 @@
 
     <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Redoma" />
 
     <!-- Android PWA (legado) -->
     <meta name="mobile-web-app-capable" content="yes" />
 
-    <!-- Favicons -->
-    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <!-- Ícones -->
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+
+    <!-- PNG favicons (opcional, melhora alguns browsers) -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+
+    <!-- PWA icons -->
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
+
+    <!-- iOS home screen icon -->
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
 
     <!-- (Opcional) melhora aparência no iOS quando abrir como app -->
     <meta name="format-detection" content="telephone=no" />
 
-    <!-- Fonte -->
+    <!-- Fonte (mantém visual consistente) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -44,7 +47,7 @@
       rel="stylesheet"
     />
 
-    <!-- Tailwind via CDN (seu app depende disso para “voltar o design”) -->
+    <!-- Tailwind via CDN (restaura o design) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Config Tailwind (cores "redoma") -->
@@ -68,13 +71,13 @@
       };
     </script>
 
-    <!-- Fallback visual -->
+    <!-- (Opcional) previne “flash” de fundo branco + garante altura -->
     <style>
       html,
       body {
         height: 100%;
         margin: 0;
-        background: #0f172a;
+        background: #0f172a; /* fallback */
         font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto,
           Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
       }
