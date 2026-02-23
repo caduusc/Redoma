@@ -87,9 +87,14 @@ const ClientStart: React.FC = () => {
   const [activeConversations, setActiveConversations] = useState<ConversationRow[]>([]);
   const [unreadByConvId, setUnreadByConvId] = useState<Record<string, boolean>>({});
 
-  // 🔥 NOVO: mapa communityId -> communityName (pra exibir nome ao invés do ID)
+  // mapa communityId -> communityName (pra exibir nome ao invés do ID)
   const [communityNameById, setCommunityNameById] = useState<Record<string, string>>({});
   const [loadingNames, setLoadingNames] = useState(false);
+
+  // ✅ Classe padrão de input (sem CSS externo)
+  const inputBase =
+    'w-full px-5 py-4 rounded-2xl border focus:ring-2 focus:border-transparent focus:outline-none transition-all ' +
+    'text-slate-900 placeholder:text-slate-400 caret-slate-900';
 
   /* ========= STEP 1: IDENTIDADE (nome + celular) ========= */
 
@@ -238,14 +243,14 @@ const ClientStart: React.FC = () => {
         const convs = (data || []) as ConversationRow[];
 
         const uniqueCommunities = Array.from(
-          new Set(convs.map((c) => c.community_id).filter(Boolean))
+          new Set(convs.map((c: any) => c.community_id).filter(Boolean))
         );
         setCommunitiesUsed(uniqueCommunities);
 
         const now = Date.now();
         const twentyFourHoursMs = 24 * 60 * 60 * 1000;
 
-        const active = convs.filter((c) => {
+        const active = convs.filter((c: any) => {
           const created = new Date(c.created_at).getTime();
           const within24h = now - created <= twentyFourHoursMs;
           const isOpen = c.status !== 'closed' && c.status !== 'CLOSED';
@@ -253,7 +258,7 @@ const ClientStart: React.FC = () => {
         });
 
         const byCommunity = new Map<string, ConversationRow>();
-        for (const c of active) {
+        for (const c: any of active) {
           if (!byCommunity.has(c.community_id)) {
             byCommunity.set(c.community_id, c);
           }
@@ -311,7 +316,7 @@ const ClientStart: React.FC = () => {
     if (step !== 'COMMUNITY') return;
     if (activeConversations.length === 0) return;
 
-    const activeIds = activeConversations.map((c) => c.id);
+    const activeIds = activeConversations.map((c: any) => c.id);
 
     const channel = supabasePublic
       .channel(
@@ -380,7 +385,7 @@ const ClientStart: React.FC = () => {
       const resolvedCommunityId = comm.id;
 
       const existingActive = activeConversations.find(
-        (c) => c.community_id === resolvedCommunityId
+        (c: any) => c.community_id === resolvedCommunityId
       );
       if (existingActive) {
         setUnreadByConvId((prev) => ({
@@ -453,7 +458,7 @@ const ClientStart: React.FC = () => {
     }));
 
     setActiveConversationId(conv.id);
-    localStorage.setItem('redoma_client_cid', conv.community_id);
+    localStorage.setItem('redoma_client_cid', (conv as any).community_id);
     navigate('/client/chat');
   };
 
@@ -476,10 +481,9 @@ const ClientStart: React.FC = () => {
           placeholder="Ex: Eduardo, Ju, Dona Maria"
           value={fullName}
           onChange={handleFullNameChange}
-          className={`w-full px-5 py-4 rounded-2xl border ${
+          className={`${inputBase} ${
             fullNameError ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-slate-50/50'
-          } focus:ring-2 ${fullNameError ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'}
-          focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
+          } ${fullNameError ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'}`}
           required
         />
         {fullNameError && (
@@ -508,10 +512,9 @@ const ClientStart: React.FC = () => {
           placeholder="Ex: 11987654321"
           value={phone}
           onChange={handlePhoneChange}
-          className={`w-full px-5 py-4 rounded-2xl border ${
+          className={`${inputBase} ${
             phoneError ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-slate-50/50'
-          } focus:ring-2 ${phoneError ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'}
-          focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300`}
+          } ${phoneError ? 'focus:ring-red-200' : 'focus:ring-redoma-steel'}`}
           required
         />
         {phoneError && (
@@ -542,7 +545,6 @@ const ClientStart: React.FC = () => {
 
   const renderCommunityStep = () => (
     <div className="p-6 space-y-5 pt-4">
-      {/* Saudação */}
       <div>
         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
           Bem-vindo de volta
@@ -552,7 +554,6 @@ const ClientStart: React.FC = () => {
         </h2>
       </div>
 
-      {/* erros gerais */}
       {communityError && (
         <div className="flex items-start gap-2 mt-1 px-1 animate-in fade-in slide-in-from-top-1">
           <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
@@ -563,7 +564,6 @@ const ClientStart: React.FC = () => {
       )}
 
       <div className="space-y-6">
-        {/* Conversas ativas */}
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <MessageCircle size={16} className="text-redoma-steel" />
@@ -583,7 +583,7 @@ const ClientStart: React.FC = () => {
             </p>
           ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {activeConversations.map((conv) => {
+              {activeConversations.map((conv: any) => {
                 const hasUnread = !!unreadByConvId[conv.id];
                 const label = getCommunityLabel(conv.community_id);
 
@@ -616,7 +616,6 @@ const ClientStart: React.FC = () => {
           )}
         </div>
 
-        {/* Botão para catálogo */}
         <div className="space-y-3">
           <button
             type="button"
@@ -634,7 +633,6 @@ const ClientStart: React.FC = () => {
           ) : null}
         </div>
 
-        {/* Comunidades em que já contribuiu */}
         <div className="space-y-3">
           <p className="text-sm text-slate-500">
             Qual comunidade deseja contribuir hoje?
@@ -667,7 +665,6 @@ const ClientStart: React.FC = () => {
           ) : null}
         </div>
 
-        {/* Outra comunidade */}
         <div className="pt-3 border-t border-slate-100 space-y-3">
           <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
             Outra comunidade
@@ -682,7 +679,7 @@ const ClientStart: React.FC = () => {
                 if (communityError) setCommunityError(null);
               }}
               disabled={submittingConversation}
-              className="w-full px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50/50 focus:ring-2 focus:ring-redoma-steel focus:border-transparent focus:outline-none transition-all placeholder:text-slate-300 text-sm"
+              className={`${inputBase} border-slate-200 bg-slate-50/50 focus:ring-redoma-steel text-sm`}
             />
             <button
               type="submit"
@@ -719,11 +716,9 @@ const ClientStart: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-redoma-light px-4 py-8 relative overflow-x-hidden">
-      {/* fundos decorativos */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
 
-      {/* card principal */}
       <div className="w-full max-w-md mx-auto bg-white rounded-[2rem] shadow-2xl shadow-redoma-dark/5 overflow-hidden relative z-10 border border-slate-100">
         <div className="p-6 bg-redoma-dark text-white text-center">
           <Logo size={60} className="mb-4 drop-shadow-xl" />
@@ -747,7 +742,6 @@ const ClientStart: React.FC = () => {
         {step === 'IDENTITY' ? renderIdentityStep() : renderCommunityStep()}
       </div>
 
-      {/* footer de navegação */}
       <div className="mt-6 flex gap-6 justify-center relative z-10 pb-4">
         <button
           type="button"
