@@ -18,7 +18,10 @@
 
     <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
     <meta name="apple-mobile-web-app-title" content="Redoma" />
 
     <!-- Android PWA (legado) -->
@@ -27,23 +30,67 @@
     <!-- Ícones (coloque esses arquivos em /public/icons/) -->
     <link rel="icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="/icons/icon-192.png"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/icons/apple-touch-icon.png"
+    />
 
     <!-- (Opcional) melhora aparência no iOS quando abrir como app -->
     <meta name="format-detection" content="telephone=no" />
 
-    <!-- (Opcional) previne “flash” de fundo branco -->
+    <!-- Fonte (mantém visual consistente) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Tailwind via CDN (restaura o design) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Config Tailwind (cores "redoma") -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              redoma: {
+                dark: "#1E2A3A",
+                navy: "#151E29",
+                steel: "#6B8BA4",
+                glow: "#A3BCCB",
+                star: "#F4F4DC",
+                bg: "#FFFFFF",
+                light: "#F9FAFB",
+              },
+            },
+          },
+        },
+      };
+    </script>
+
+    <!-- (Opcional) previne “flash” de fundo branco + garante altura -->
     <style>
-      html, body {
+      html,
+      body {
         height: 100%;
         margin: 0;
-        background: #0f172a; /* ajuste se quiser */
+        background: #0f172a; /* fallback */
+        font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto,
+          Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
       }
     </style>
   </head>
 
-  <body>
+  <body class="bg-redoma-navy text-slate-100">
     <div id="root"></div>
 
     <!-- Vite / React -->
