@@ -45,7 +45,8 @@ const ClientCommunities: React.FC = () => {
     fetchCommunities();
   }, []);
 
-  const getPublicId = (c: CommunityRow) => (c.slug && c.slug.trim() ? c.slug : c.id);
+  const getPublicId = (c: CommunityRow) =>
+    c.slug && c.slug.trim() ? c.slug : c.id;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -60,6 +61,7 @@ const ClientCommunities: React.FC = () => {
   return (
     <div className="min-h-screen bg-redoma-light flex flex-col items-center justify-start p-6 relative overflow-hidden">
 
+      {/* fundos decorativos */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
 
@@ -128,39 +130,38 @@ const ClientCommunities: React.FC = () => {
             </p>
           ) : (
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
               {filtered.map((c) => {
-
                 const publicId = getPublicId(c);
 
                 return (
                   <div
                     key={c.id}
-                    className="rounded-2xl border border-slate-200 bg-white p-5 hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition"
+                    className="rounded-2xl border border-slate-200 bg-white p-6 hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition"
                   >
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-5">
 
                       {c.logo_url ? (
                         <img
                           src={c.logo_url}
                           alt={c.name}
-                          className="w-24 h-24 rounded-2xl object-cover border border-slate-100"
+                          className="w-32 h-32 rounded-2xl object-cover border border-slate-100"
                         />
                       ) : (
-                        <div className="w-24 h-24 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 text-xl font-bold">
+                        <div className="w-32 h-32 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 text-3xl font-bold">
                           {c.name?.charAt(0) || 'C'}
                         </div>
                       )}
 
                       <div className="min-w-0">
 
-                        <p className="font-extrabold text-slate-800 text-sm truncate">
+                        <p className="font-extrabold text-slate-800 text-base truncate">
                           {c.name}
                         </p>
 
-                        <div className="mt-1 flex flex-wrap gap-2">
+                        <div className="mt-2 flex flex-wrap gap-2">
 
                           <span className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-slate-500">
                             ID: {publicId}
@@ -173,16 +174,16 @@ const ClientCommunities: React.FC = () => {
                     </div>
 
                     {c.description ? (
-                      <p className="text-xs text-slate-500 leading-relaxed mt-3">
+                      <p className="text-xs text-slate-500 leading-relaxed mt-4">
                         {c.description}
                       </p>
                     ) : (
-                      <p className="text-xs text-slate-400 leading-relaxed mt-3">
+                      <p className="text-xs text-slate-400 leading-relaxed mt-4">
                         Sem descrição.
                       </p>
                     )}
 
-                    <div className="mt-4">
+                    <div className="mt-5">
 
                       <button
                         type="button"
