@@ -12,7 +12,6 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ provider }) => {
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all p-6 flex flex-col h-full group">
       <div className="flex justify-between items-start mb-4">
-        
         {/* LOGO OU LETRA */}
         <div className="w-12 h-12 rounded-xl flex items-center justify-center border border-slate-100 bg-slate-50 overflow-hidden group-hover:bg-redoma-light transition-colors">
           {provider.logo_url ? (
@@ -29,19 +28,12 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ provider }) => {
         </div>
 
         <div className="flex flex-col items-end">
-          
-          {/* TEXTO DE RETORNO */}
-          <span className="text-[10px] text-slate-500 font-semibold mb-1">
-            Retorno de até{' '}
-            <span className="text-emerald-600 font-bold">
-              {provider.cashbackPercent}%
-            </span>
+          <span className="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-1 rounded-md tracking-wider mb-1">
+            Retorno de até {provider.cashbackPercent}%
           </span>
-
           <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
             {provider.category}
           </span>
-
         </div>
       </div>
 
