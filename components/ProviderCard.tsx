@@ -29,7 +29,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({ provider }) => {
 
         <div className="flex flex-col items-end">
           <span className="bg-emerald-50 text-emerald-600 text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider mb-1">
-            até {provider.cashbackPercent}% Revertido
+            Retorno: Até {provider.cashbackPercent}%
           </span>
           <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
             {provider.category}
