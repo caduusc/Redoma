@@ -122,20 +122,20 @@ const ClientCommunities: React.FC = () => {
           ) : filtered.length === 0 ? (
             <p className="text-sm text-slate-400">Nenhuma comunidade encontrada com esse filtro.</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
               {filtered.map((c) => {
                 const publicId = getPublicId(c);
 
                 return (
                   <div
                     key={c.id}
-                    className="rounded-2xl border border-slate-200 bg-white p-6 hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition"
+                    className="rounded-2xl border border-slate-200 bg-white p-6 hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition flex flex-col h-full"
                   >
                     <h2 className="font-extrabold text-slate-800 text-lg leading-tight mb-4">
                       {c.name}
                     </h2>
 
-                    <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-5">
+                    <div className="flex flex-col md:flex-row md:items-start gap-4 md:gap-5 flex-1">
                       <div className="flex flex-col items-center md:items-start">
                         {c.logo_url ? (
                           <img
@@ -165,13 +165,13 @@ const ClientCommunities: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="mt-5 space-y-2">
+                    <div className="mt-auto pt-5 space-y-2">
                       <button
                         type="button"
                         onClick={() => handleChooseCommunity(publicId)}
                         className="w-full px-4 py-3 rounded-2xl bg-redoma-dark text-white font-bold text-[10px] uppercase tracking-widest hover:bg-redoma-navy transition"
                       >
-                        Escolher essa comunidade
+                        Apoiar
                       </button>
 
                       <button
@@ -183,7 +183,7 @@ const ClientCommunities: React.FC = () => {
                       </button>
 
                       <p className="text-[10px] text-slate-400 mt-2">
-                        Ao escolher, você será levado direto para o atendimento com essa comunidade.
+                        Você será levado direto para o atendimento desta comunidade.
                       </p>
                     </div>
                   </div>
