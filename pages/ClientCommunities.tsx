@@ -57,14 +57,24 @@ const ClientCommunities: React.FC = () => {
     });
   }, [communities, query]);
 
+  const handleChooseCommunity = (publicId: string) => {
+    navigate(`/client/start?community=${encodeURIComponent(publicId)}`);
+  };
+
+  const handleCopyId = async (publicId: string) => {
+    try {
+      await navigator.clipboard?.writeText(publicId);
+    } catch (err) {
+      console.error('[ClientCommunities] copy error', err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-redoma-light flex flex-col items-center justify-start p-6 relative overflow-hidden">
-      {/* fundos decorativos */}
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="w-full max-w-4xl bg-white rounded-[2rem] shadow-2xl shadow-redoma-dark/5 overflow-hidden relative z-10 border border-slate-100">
-        {/* Header */}
         <div className="p-10 bg-redoma-dark text-white text-center relative">
           <button
             type="button"
@@ -80,11 +90,10 @@ const ClientCommunities: React.FC = () => {
           <h1 className="text-3xl font-bold tracking-tight">Comunidades & Projetos</h1>
 
           <p className="text-redoma-glow text-sm mt-3 font-medium">
-            Para apoiar alguma comunidade listada aqui, use o ID na página inicial.
+            Escolha uma comunidade abaixo e siga direto para o atendimento.
           </p>
         </div>
 
-        {/* Search */}
         <div className="px-10 py-6 border-b border-slate-50 bg-slate-50/30">
           <div className="flex items-center gap-3 bg-white border border-slate-200 rounded-2xl px-4 py-3">
             <Search size={16} className="text-slate-400" />
@@ -97,7 +106,6 @@ const ClientCommunities: React.FC = () => {
           </div>
         </div>
 
-        {/* Body */}
         <div className="p-10 pt-6">
           <div className="flex items-center gap-2 mb-4">
             <Users size={16} className="text-redoma-steel" />
@@ -123,12 +131,10 @@ const ClientCommunities: React.FC = () => {
                     key={c.id}
                     className="rounded-2xl border border-slate-200 bg-white p-6 hover:border-redoma-steel/40 hover:bg-redoma-steel/5 transition"
                   >
-                    {/* TÍTULO DO CARD (resolve o quebrado no mobile) */}
                     <h2 className="font-extrabold text-slate-800 text-lg leading-tight mb-4">
                       {c.name}
                     </h2>
 
-                    {/* Conteúdo principal */}
                     <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-5">
                       <div className="flex flex-col items-center md:items-start">
                         {c.logo_url ? (
@@ -159,19 +165,25 @@ const ClientCommunities: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="mt-5">
+                    <div className="mt-5 space-y-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          navigator.clipboard?.writeText(publicId);
-                        }}
+                        onClick={() => handleChooseCommunity(publicId)}
+                        className="w-full px-4 py-3 rounded-2xl bg-redoma-dark text-white font-bold text-[10px] uppercase tracking-widest hover:bg-redoma-navy transition"
+                      >
+                        Escolher essa comunidade
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyId(publicId)}
                         className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-[10px] uppercase tracking-widest hover:bg-slate-100 transition"
                       >
                         Copiar ID
                       </button>
 
                       <p className="text-[10px] text-slate-400 mt-2">
-                        Cole o ID na página inicial para iniciar o atendimento.
+                        Ao escolher, você será levado direto para o atendimento com essa comunidade.
                       </p>
                     </div>
                   </div>

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { supabasePublic } from '../lib/supabase';
 import Logo from '../components/Logo';
@@ -14,26 +14,24 @@ const getOrCreateClientToken = () => {
   return token;
 };
 
-// normaliza nome: tira acentos, múltiplos espaços, deixa minúsculo
 const normalizeFullName = (name: string) =>
   name
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // remove acentos
+    .replace(/[\u0300-\u036f]/g, '')
     .trim()
-    .replace(/\s+/g, ' ') // colapsa espaços
+    .replace(/\s+/g, ' ')
     .toLowerCase();
 
-// normaliza telefone: só dígitos, removendo DDI 55 se vier
 const normalizePhone = (phone: string) =>
   phone
-    .replace(/\D/g, '') // só dígitos
-    .replace(/^55/, ''); // remove DDI Brasil se vier
+    .replace(/\D/g, '')
+    .replace(/^55/, '');
 
 type Step = 'IDENTITY' | 'COMMUNITY';
 
 type ConversationRow = {
   id: string;
-  communityId: string;
+  community_id: string;
   status: string | null;
   created_at: string;
   last_client_seen_at: string | null;
@@ -48,12 +46,11 @@ type CommunityRowMinimal = {
 
 const ClientStart: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { createConversation, setActiveConversationId } = useChat();
 
-  // garante token do cliente (para outras partes do app)
   useMemo(() => getOrCreateClientToken(), []);
 
-  // dados de identidade vindos do localStorage (se existirem)
   const [fullName, setFullName] = useState<string>(
     () => localStorage.getItem('redoma_full_name') || ''
   );
@@ -61,14 +58,12 @@ const ClientStart: React.FC = () => {
     () => localStorage.getItem('redoma_phone') || ''
   );
 
-  // se já tiver nome + telefone, começa direto na tela de comunidades
   const [step, setStep] = useState<Step>(() => {
     const storedName = localStorage.getItem('redoma_full_name');
     const storedPhone = localStorage.getItem('redoma_phone');
     return storedName && storedPhone ? 'COMMUNITY' : 'IDENTITY';
   });
 
-  // erros do step de identidade
   const [fullNameError, setFullNameError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
@@ -77,7 +72,6 @@ const ClientStart: React.FC = () => {
     [fullName]
   );
 
-  // STEP 2 – Comunidades / conversas
   const [communityInput, setCommunityInput] = useState('');
   const [communityError, setCommunityError] = useState<string | null>(null);
   const [loadingCommunities, setLoadingCommunities] = useState(false);
@@ -87,16 +81,127 @@ const ClientStart: React.FC = () => {
   const [activeConversations, setActiveConversations] = useState<ConversationRow[]>([]);
   const [unreadByConvId, setUnreadByConvId] = useState<Record<string, boolean>>({});
 
-  // mapa communityId -> communityName (pra exibir nome ao invés do ID)
   const [communityNameById, setCommunityNameById] = useState<Record<string, string>>({});
+  const [communityNameBySlug, setCommunityNameBySlug] = useState<Record<string, string>>({});
   const [loadingNames, setLoadingNames] = useState(false);
 
-  // ✅ Classe padrão de input (sem CSS externo)
+  const requestedCommunity = (searchParams.get('community') || '').trim();
+  const autoStartAttemptedRef = useRef<string | null>(null);
+
   const inputBase =
     'w-full px-5 py-4 rounded-2xl border focus:ring-2 focus:border-transparent focus:outline-none transition-all ' +
     'text-slate-900 placeholder:text-slate-400 caret-slate-900';
 
-  /* ========= STEP 1: IDENTIDADE (nome + celular) ========= */
+  const clearCommunityFromUrl = () => {
+    if (!searchParams.get('community')) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete('community');
+    setSearchParams(next, { replace: true });
+  };
+
+  const getCommunityLabel = (communityValue: string) => {
+    return (
+      communityNameById[communityValue] ||
+      communityNameBySlug[communityValue.toLowerCase()] ||
+      communityValue
+    );
+  };
+
+  const startConversationForCommunity = async (communityIdOrSlug: string) => {
+    setSubmittingConversation(true);
+    setCommunityError(null);
+
+    try {
+      const normalizedInput = communityIdOrSlug.trim().toLowerCase();
+      const rawName = fullName.trim();
+      const phoneNorm = normalizePhone(phone);
+
+      if (!normalizedInput || !rawName || !phoneNorm) {
+        setCommunityError('Informe o ID da comunidade, seu nome e celular.');
+        return false;
+      }
+
+      const { data: comm, error: commErr } = await supabasePublic
+        .from('communities')
+        .select('id, slug')
+        .eq('isActive', true)
+        .or(`id.eq.${normalizedInput},slug.eq.${normalizedInput}`)
+        .maybeSingle();
+
+      if (commErr) throw commErr;
+
+      if (!comm?.id) {
+        setCommunityError(
+          'O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato no WhatsApp 11 95825-8734'
+        );
+        return false;
+      }
+
+      const resolvedCommunityId = comm.id;
+
+      const existingActive = activeConversations.find(
+        (c) => c.community_id === resolvedCommunityId
+      );
+
+      if (existingActive) {
+        setUnreadByConvId((prev) => ({
+          ...prev,
+          [existingActive.id]: false,
+        }));
+
+        setActiveConversationId(existingActive.id);
+        localStorage.setItem('redoma_active_conv', existingActive.id);
+        localStorage.setItem('redoma_client_cid', resolvedCommunityId);
+        clearCommunityFromUrl();
+        navigate('/client/chat');
+        return true;
+      }
+
+      const normalizedFullName = normalizeFullName(rawName);
+
+      const { data: memberData, error: memberError } = await supabasePublic
+        .from('members')
+        .upsert(
+          {
+            community_id: resolvedCommunityId,
+            full_name: rawName,
+            full_name_normalized: normalizedFullName,
+            phone: phoneNorm,
+            phone_normalized: phoneNorm,
+          },
+          { onConflict: 'community_id,phone_normalized' }
+        )
+        .select('member_id, community_id, full_name')
+        .single();
+
+      if (memberError || !memberData) {
+        console.error('[ClientStart] upsert member error', memberError);
+        setCommunityError('Não foi possível identificar você. Tente novamente.');
+        return false;
+      }
+
+      const session = {
+        memberId: memberData.member_id,
+        communityId: memberData.community_id,
+        fullName: memberData.full_name,
+      };
+
+      localStorage.setItem('redoma_member_session', JSON.stringify(session));
+      localStorage.setItem('redoma_client_cid', resolvedCommunityId);
+
+      await createConversation(resolvedCommunityId);
+
+      clearCommunityFromUrl();
+      navigate('/client/chat');
+      return true;
+    } catch (err) {
+      console.error('Erro ao iniciar conversa:', err);
+      setCommunityError('Não foi possível iniciar sua conversa. Tente novamente.');
+      return false;
+    } finally {
+      setSubmittingConversation(false);
+    }
+  };
 
   const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFullName(e.target.value);
@@ -121,7 +226,6 @@ const ClientStart: React.FC = () => {
       hasError = true;
     }
 
-    // Brasil: geralmente 10 ou 11 dígitos (DDD + número)
     if (!phoneNorm || phoneNorm.length < 10 || phoneNorm.length > 11) {
       setPhoneError('Informe um celular com DDD válido (apenas números).');
       hasError = true;
@@ -129,15 +233,12 @@ const ClientStart: React.FC = () => {
 
     if (hasError) return;
 
-    // persiste identidade no localStorage
     localStorage.setItem('redoma_full_name', rawName);
     localStorage.setItem('redoma_phone', phoneNorm);
     setPhone(phoneNorm);
 
     setStep('COMMUNITY');
   };
-
-  /* ========= NOME DAS COMUNIDADES (map id->name) ========= */
 
   useEffect(() => {
     const fetchCommunityNames = async () => {
@@ -154,15 +255,21 @@ const ClientStart: React.FC = () => {
         if (error) {
           console.error('[ClientStart] fetch communities (names) error', error);
           setCommunityNameById({});
+          setCommunityNameBySlug({});
           return;
         }
 
         const rows = (data || []) as CommunityRowMinimal[];
-        const map: Record<string, string> = {};
+        const idMap: Record<string, string> = {};
+        const slugMap: Record<string, string> = {};
+
         for (const c of rows) {
-          if (c?.id && c?.name) map[c.id] = c.name;
+          if (c?.id && c?.name) idMap[c.id] = c.name;
+          if (c?.slug && c?.name) slugMap[c.slug.toLowerCase()] = c.name;
         }
-        setCommunityNameById(map);
+
+        setCommunityNameById(idMap);
+        setCommunityNameBySlug(slugMap);
       } finally {
         setLoadingNames(false);
       }
@@ -170,12 +277,6 @@ const ClientStart: React.FC = () => {
 
     fetchCommunityNames();
   }, [step]);
-
-  const getCommunityLabel = (communityId: string) => {
-    return communityNameById[communityId] || communityId;
-  };
-
-  /* ========= STEP 2: BUSCAR CONVERSAS DO USUÁRIO ========= */
 
   useEffect(() => {
     const fetchCommunitiesAndConversations = async () => {
@@ -243,14 +344,14 @@ const ClientStart: React.FC = () => {
         const convs = (data || []) as ConversationRow[];
 
         const uniqueCommunities = Array.from(
-          new Set(convs.map((c: any) => c.community_id).filter(Boolean))
+          new Set(convs.map((c) => c.community_id).filter(Boolean))
         );
         setCommunitiesUsed(uniqueCommunities);
 
         const now = Date.now();
         const twentyFourHoursMs = 24 * 60 * 60 * 1000;
 
-        const active = convs.filter((c: any) => {
+        const active = convs.filter((c) => {
           const created = new Date(c.created_at).getTime();
           const within24h = now - created <= twentyFourHoursMs;
           const isOpen = c.status !== 'closed' && c.status !== 'CLOSED';
@@ -258,7 +359,7 @@ const ClientStart: React.FC = () => {
         });
 
         const byCommunity = new Map<string, ConversationRow>();
-        for (const c: any of active) {
+        for (const c of active) {
           if (!byCommunity.has(c.community_id)) {
             byCommunity.set(c.community_id, c);
           }
@@ -310,13 +411,11 @@ const ClientStart: React.FC = () => {
     fetchCommunitiesAndConversations();
   }, [step, phone]);
 
-  /* ========= REALTIME: NOVAS MENSAGENS DO SUPORTE ========= */
-
   useEffect(() => {
     if (step !== 'COMMUNITY') return;
     if (activeConversations.length === 0) return;
 
-    const activeIds = activeConversations.map((c: any) => c.id);
+    const activeIds = activeConversations.map((c) => c.id);
 
     const channel = supabasePublic
       .channel(
@@ -350,97 +449,20 @@ const ClientStart: React.FC = () => {
     };
   }, [step, activeConversations, phone]);
 
-  /* ========= HELPERS PARA CRIAR / REUTILIZAR CONVERSA ========= */
+  useEffect(() => {
+    if (step !== 'COMMUNITY') return;
+    if (!requestedCommunity) return;
+    if (submittingConversation) return;
 
-  const startConversationForCommunity = async (communityIdOrSlug: string) => {
-    setSubmittingConversation(true);
-    setCommunityError(null);
+    const rawName = fullName.trim();
+    const phoneNorm = normalizePhone(phone);
 
-    try {
-      const normalizedInput = communityIdOrSlug.trim().toLowerCase();
-      const rawName = fullName.trim();
-      const phoneNorm = normalizePhone(phone);
+    if (!rawName || !phoneNorm) return;
+    if (autoStartAttemptedRef.current === requestedCommunity) return;
 
-      if (!normalizedInput || !rawName || !phoneNorm) {
-        setCommunityError('Informe o ID da comunidade, seu nome e celular.');
-        return;
-      }
-
-      // resolve id OU slug -> id real
-      const { data: comm, error: commErr } = await supabasePublic
-        .from('communities')
-        .select('id, slug')
-        .or(`id.eq.${normalizedInput},slug.eq.${normalizedInput}`)
-        .maybeSingle();
-
-      if (commErr) throw commErr;
-
-      if (!comm?.id) {
-        setCommunityError(
-          'O ID está incorreto, verifique com a liderança da sua comunidade ou entre em contato no WhatsApp 11 95825-8734'
-        );
-        return;
-      }
-
-      const resolvedCommunityId = comm.id;
-
-      const existingActive = activeConversations.find(
-        (c: any) => c.community_id === resolvedCommunityId
-      );
-      if (existingActive) {
-        setUnreadByConvId((prev) => ({
-          ...prev,
-          [existingActive.id]: false,
-        }));
-
-        setActiveConversationId(existingActive.id);
-        localStorage.setItem('redoma_client_cid', resolvedCommunityId);
-        navigate('/client/chat');
-        return;
-      }
-
-      // cria/recupera member
-      const normalizedFullName = normalizeFullName(rawName);
-
-      const { data: memberData, error: memberError } = await supabasePublic
-        .from('members')
-        .upsert(
-          {
-            community_id: resolvedCommunityId,
-            full_name: rawName,
-            full_name_normalized: normalizedFullName,
-            phone: phoneNorm,
-            phone_normalized: phoneNorm,
-          },
-          { onConflict: 'community_id,phone_normalized' }
-        )
-        .select('member_id, community_id, full_name')
-        .single();
-
-      if (memberError || !memberData) {
-        console.error('[ClientStart] upsert member error', memberError);
-        setCommunityError('Não foi possível identificar você. Tente novamente.');
-        return;
-      }
-
-      // sessão do membro
-      const session = {
-        memberId: memberData.member_id,
-        communityId: memberData.community_id,
-        fullName: memberData.full_name,
-      };
-      localStorage.setItem('redoma_member_session', JSON.stringify(session));
-      localStorage.setItem('redoma_client_cid', resolvedCommunityId);
-
-      await createConversation(resolvedCommunityId);
-      navigate('/client/chat');
-    } catch (err) {
-      console.error('Erro ao iniciar conversa:', err);
-      setCommunityError('Não foi possível iniciar sua conversa. Tente novamente.');
-    } finally {
-      setSubmittingConversation(false);
-    }
-  };
+    autoStartAttemptedRef.current = requestedCommunity;
+    startConversationForCommunity(requestedCommunity);
+  }, [step, requestedCommunity, fullName, phone, activeConversations, submittingConversation]);
 
   const handleSelectExistingCommunity = (communityId: string) => {
     startConversationForCommunity(communityId);
@@ -458,11 +480,10 @@ const ClientStart: React.FC = () => {
     }));
 
     setActiveConversationId(conv.id);
-    localStorage.setItem('redoma_client_cid', (conv as any).community_id);
+    localStorage.setItem('redoma_active_conv', conv.id);
+    localStorage.setItem('redoma_client_cid', conv.community_id);
     navigate('/client/chat');
   };
-
-  /* ======================= RENDER ======================= */
 
   const renderIdentityStep = () => (
     <form onSubmit={handleSubmitIdentity} className="p-6 space-y-5 pt-4" autoComplete="on">
@@ -527,6 +548,20 @@ const ClientStart: React.FC = () => {
         )}
       </div>
 
+      {requestedCommunity ? (
+        <div className="rounded-2xl border border-redoma-steel/15 bg-redoma-steel/5 px-4 py-3">
+          <p className="text-[11px] text-slate-500 uppercase tracking-widest font-bold">
+            Comunidade selecionada
+          </p>
+          <p className="text-sm text-slate-700 mt-1 font-semibold">
+            {getCommunityLabel(requestedCommunity)}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-2">
+            Preencha seus dados para iniciar direto o atendimento dessa comunidade.
+          </p>
+        </div>
+      ) : null}
+
       <button
         type="submit"
         disabled={!fullName.trim() || !normalizePhone(phone)}
@@ -563,6 +598,20 @@ const ClientStart: React.FC = () => {
         </div>
       )}
 
+      {requestedCommunity ? (
+        <div className="rounded-2xl border border-redoma-steel/15 bg-redoma-steel/5 px-4 py-3">
+          <p className="text-[11px] text-slate-500 uppercase tracking-widest font-bold">
+            Comunidade escolhida
+          </p>
+          <p className="text-sm text-slate-700 mt-1 font-semibold">
+            {getCommunityLabel(requestedCommunity)}
+          </p>
+          <p className="text-[11px] text-slate-500 mt-2">
+            Estamos conectando você automaticamente ao atendimento dessa comunidade.
+          </p>
+        </div>
+      ) : null}
+
       <div className="space-y-6">
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -583,7 +632,7 @@ const ClientStart: React.FC = () => {
             </p>
           ) : (
             <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-              {activeConversations.map((conv: any) => {
+              {activeConversations.map((conv) => {
                 const hasUnread = !!unreadByConvId[conv.id];
                 const label = getCommunityLabel(conv.community_id);
 
@@ -627,9 +676,7 @@ const ClientStart: React.FC = () => {
           </button>
 
           {loadingNames ? (
-            <p className="text-[11px] text-slate-400">
-              Carregando catálogo...
-            </p>
+            <p className="text-[11px] text-slate-400">Carregando catálogo...</p>
           ) : null}
         </div>
 

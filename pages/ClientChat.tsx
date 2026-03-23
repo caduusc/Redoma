@@ -9,8 +9,7 @@ import { LayoutGrid } from 'lucide-react';
 
 const ClientChat: React.FC = () => {
   const navigate = useNavigate();
-  
-  // ✅ CORREÇÃO: Usar as propriedades corretas do contexto
+
   const {
     getConversation,
     getMessages,
@@ -22,18 +21,12 @@ const ClientChat: React.FC = () => {
   const [communityName, setCommunityName] = useState<string | null>(null);
   const [loadingTitle, setLoadingTitle] = useState<boolean>(true);
 
-  // ✅ CORREÇÃO: Pegar o ID da conversa ativa do localStorage
   const activeConvId = localStorage.getItem('redoma_active_conv');
-  
-  // ✅ CORREÇÃO: Buscar a conversa usando a função do contexto
   const conversation = activeConvId ? getConversation(activeConvId) : undefined;
-  
-  // ✅ CORREÇÃO: Buscar as mensagens usando a função do contexto
   const messages = activeConvId ? getMessages(activeConvId) : [];
 
   const [seenAt, setSeenAt] = useState<number>(Date.now());
 
-  // Marca last_client_seen_at no banco ao entrar no chat
   useEffect(() => {
     if (!conversation?.id) return;
 
@@ -49,7 +42,6 @@ const ClientChat: React.FC = () => {
     markSeen();
   }, [conversation?.id]);
 
-  // ✅ CORREÇÃO: só mostra "nova resposta" se chegou msg do agente DEPOIS do último seen
   const hasUnreadFromAgent = useMemo(() => {
     if (!messages.length) return false;
     return messages.some(
@@ -59,16 +51,10 @@ const ClientChat: React.FC = () => {
     );
   }, [messages, seenAt]);
 
-  // ✅ fallback: tenta pegar o communityId do localStorage (setado no ClientStart)
   const communityIdForTitle = useMemo(() => {
-    return (
-      conversation?.community_id ||
-      localStorage.getItem('redoma_client_cid') ||
-      null
-    );
+    return conversation?.community_id || localStorage.getItem('redoma_client_cid') || null;
   }, [conversation?.community_id]);
 
-  // 🔥 resolve communityId -> name (para o título)
   useEffect(() => {
     const cid = communityIdForTitle;
 
@@ -106,20 +92,23 @@ const ClientChat: React.FC = () => {
     };
   }, [communityIdForTitle]);
 
+  useEffect(() => {
+    if (activeConvId) return;
+    navigate('/client/start');
+  }, [activeConvId, navigate]);
+
   const titleLabel = useMemo(() => {
     if (communityName) return communityName;
     if (loadingTitle) return 'Carregando...';
-    if (communityIdForTitle) return communityIdForTitle; // fallback final (ID)
+    if (communityIdForTitle) return communityIdForTitle;
     return 'Chat';
   }, [communityName, loadingTitle, communityIdForTitle]);
 
-  // ✅ CORREÇÃO: handleSend agora usa addMessage com conversationId e senderType corretos
   const handleSend = async (text: string) => {
     if (!conversation?.id) return;
     await addMessage(conversation.id, text, 'client');
   };
 
-  // ✅ CORREÇÃO: handleSendImage agora usa sendImageMessage com conversationId e senderType corretos
   const handleSendImage = async (file: File) => {
     if (!conversation?.id) return;
     await sendImageMessage(conversation.id, file, 'client');
@@ -128,9 +117,6 @@ const ClientChat: React.FC = () => {
   const handleBack = () => {
     setActiveConversationId(null);
     localStorage.removeItem('redoma_active_conv');
-    // mantém redoma_client_cid pra título fallback funcionar em refresh,
-    // mas se quiser limpar também, descomenta a linha abaixo:
-    // localStorage.removeItem('redoma_client_cid');
     navigate('/client/start');
   };
 
