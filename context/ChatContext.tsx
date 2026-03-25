@@ -25,7 +25,6 @@ interface ChatContextType {
   messages: Message[];
   currentUser: User | null;
 
-  // Popup interno (toast) para avisar o atendente de novas mensagens
   agentToast: {
     id: string;
     title: string;
@@ -58,7 +57,6 @@ interface ChatContextType {
 
   setActiveConversationId: (id: string | null) => void;
 
-  // Notificações
   notificationPermission: 'default' | 'granted' | 'denied';
   notificationsEnabled: boolean;
   notificationsSupported: boolean;
@@ -69,14 +67,31 @@ interface ChatContextType {
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 const ensureClientAuthReady = async () => {
-  // garante token local (id do cliente)
   getOrCreateClientToken();
-
-  // pega JWT e aplica no realtime
   const jwt = await ensureClientJwt();
   applyRealtimeJwt(jwt);
-
   return jwt;
+};
+
+const normalizeConversation = (conv: any) => {
+  if (!conv) return conv;
+
+  return {
+    ...conv,
+    communityId: conv.communityId ?? conv.community_id ?? null,
+    community_id: conv.community_id ?? conv.communityId ?? null,
+    member_name:
+      conv.member_name ??
+      conv.memberName ??
+      conv.members?.full_name ??
+      null,
+    community_name:
+      conv.community_name ??
+      conv.communityName ??
+      conv.communities?.name ??
+      conv.community?.name ??
+      null,
+  };
 };
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -93,7 +108,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.getItem('redoma_active_conv')
   );
 
-  // Toast (popup interno) para agente
   const [agentToast, setAgentToast] = useState<ChatContextType['agentToast']>(null);
   const toastTimerRef = useRef<number | null>(null);
 
@@ -108,14 +122,49 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     notify,
   } = useAgentNotifications();
 
-  // Ref para rastrear IDs de mensagens já notificadas (evita duplicatas)
   const notifiedMsgIds = useRef<Set<string>>(new Set());
 
-  const upsertConversation = useCallback((conv: Conversation) => {
+  const upsertConversation = useCallback((conv: Conversation | any) => {
+    const normalizedConv = normalizeConversation(conv);
+
     setConversations((prev) => {
-      const exists = prev.some((c) => c.id === conv.id);
-      if (!exists) return [...prev, conv];
-      return prev.map((c) => (c.id === conv.id ? conv : c));
+      const existing = prev.find((c) => c.id === normalizedConv.id) as any;
+
+      if (!existing) {
+        return [...prev, normalizedConv];
+      }
+
+      const merged = {
+        ...existing,
+        ...normalizedConv,
+        member_name:
+          normalizedConv.member_name ??
+          existing.member_name ??
+          existing.memberName ??
+          existing.members?.full_name ??
+          null,
+        community_name:
+          normalizedConv.community_name ??
+          existing.community_name ??
+          existing.communityName ??
+          existing.communities?.name ??
+          existing.community?.name ??
+          null,
+        communityId:
+          normalizedConv.communityId ??
+          normalizedConv.community_id ??
+          existing.communityId ??
+          existing.community_id ??
+          null,
+        community_id:
+          normalizedConv.community_id ??
+          normalizedConv.communityId ??
+          existing.community_id ??
+          existing.communityId ??
+          null,
+      };
+
+      return prev.map((c) => (c.id === normalizedConv.id ? merged : c));
     });
   }, []);
 
@@ -140,7 +189,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       return next;
     });
 
-    // 🔔 Notifica o agente quando chega mensagem do cliente
     if (
       isAgent &&
       msg.sender_type === 'client' &&
@@ -152,8 +200,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           ? '📷 Imagem recebida'
           : msg.text?.slice(0, 80) || 'Nova mensagem';
 
-      // ✅ Popup interno (independe de permissão do navegador)
-      // Só mostra se o agente NÃO está dentro da conversa ativa
       if (!activeConvId || msg.conversation_id !== activeConvId) {
         if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
         setAgentToast({
@@ -168,6 +214,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           toastTimerRef.current = null;
         }, 7000);
       }
+
       notify({
         title: '💬 Nova mensagem de cliente',
         body: preview,
@@ -208,6 +255,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           supabaseSupport.removeChannel?.(convChannel);
         }
       } catch {}
+
       try {
         if (msgChannel) {
           await msgChannel.unsubscribe?.();
@@ -220,15 +268,24 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     const boot = async () => {
-      // ============ SUPORTE ============
       if (isAgent) {
         const { data: convs, error: convErr } = await supabaseSupport
           .from('conversations')
-          .select('*');
+          .select(`
+            *,
+            members (
+              full_name
+            ),
+            communities (
+              name
+            )
+          `);
 
         if (cancelled) return;
         if (convErr) console.error('[support fetch conversations]', convErr);
-        setConversations((convs || []) as Conversation[]);
+
+        const normalizedConvs = ((convs || []) as any[]).map(normalizeConversation);
+        setConversations(normalizedConvs as Conversation[]);
 
         const { data: msgs, error: msgErr } = await supabaseSupport
           .from('messages')
@@ -244,7 +301,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           .on(
             'postgres_changes' as any,
             { event: '*', schema: 'public', table: 'conversations' },
-            (p: any) => p?.new && upsertConversation(p.new as Conversation)
+            (p: any) => {
+              if (p?.new) {
+                upsertConversation(p.new);
+              }
+            }
           )
           .subscribe();
 
@@ -260,7 +321,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
-      // ============ CLIENTE ============
       try {
         await ensureClientAuthReady();
       } catch (e) {
@@ -282,7 +342,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (cancelled) return;
       if (convErr) console.error('[client fetch active conversation]', convErr);
-      setConversations(conv ? ([conv] as Conversation[]) : []);
+      setConversations(conv ? ([normalizeConversation(conv)] as Conversation[]) : []);
 
       const { data: msgs, error: msgErr } = await supabasePublic
         .from('messages')
@@ -304,7 +364,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             table: 'conversations',
             filter: `id=eq.${activeConvId}`,
           },
-          (p: any) => p?.new && upsertConversation(p.new as Conversation)
+          (p: any) => {
+            if (p?.new) {
+              upsertConversation(p.new);
+            }
+          }
         )
         .subscribe();
 

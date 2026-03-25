@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import ChatLayout from '../components/ChatLayout';
@@ -7,13 +7,18 @@ import { MessageSquare, Clock, User, LogOut, Bell, BellOff } from 'lucide-react'
 import { supabaseSupport } from '../lib/supabase';
 
 const AgentInbox: React.FC = () => {
-  const { conversations, messages, logout, currentUser,
+  const {
+    conversations,
+    messages,
+    logout,
+    currentUser,
     notificationPermission,
     notificationsEnabled,
     notificationsSupported,
     requestNotificationPermission,
     disableNotifications,
   } = useChat();
+
   const [filter, setFilter] = useState<ConversationStatus>('open');
   const navigate = useNavigate();
 
@@ -26,7 +31,6 @@ const AgentInbox: React.FC = () => {
     }
   };
 
-  // 🔔 helper: verifica se há msg do cliente mais nova que o last_agent_seen_at
   const hasUnreadFromClient = (conv: Conversation) => {
     const lastSeenTs = conv.last_agent_seen_at
       ? new Date(conv.last_agent_seen_at).getTime()
@@ -41,7 +45,9 @@ const AgentInbox: React.FC = () => {
   };
 
   const filteredConversations = conversations.filter((c) => {
-    if (filter === 'claimed') return c.status === 'claimed' && c.claimed_by === currentUser?.name;
+    if (filter === 'claimed') {
+      return c.status === 'claimed' && c.claimed_by === currentUser?.name;
+    }
     return c.status === filter;
   });
 
@@ -58,17 +64,45 @@ const AgentInbox: React.FC = () => {
     }
   };
 
+  const getMemberName = (conv: Conversation) => {
+    const conversation = conv as any;
+
+    return (
+      conversation.member_name ||
+      conversation.memberName ||
+      conversation.members?.full_name ||
+      'Usuário'
+    );
+  };
+
+  const getCommunityName = (conv: Conversation) => {
+    const conversation = conv as any;
+
+    return (
+      conversation.community_name ||
+      conversation.communityName ||
+      conversation.communities?.name ||
+      conversation.community?.name ||
+      conversation.communityId ||
+      conversation.community_id ||
+      'Comunidade'
+    );
+  };
+
   return (
     <ChatLayout
       title="Gestão de Atendimentos"
       isAgent
       actions={
         <div className="flex items-center gap-1">
-          {/* Botão de notificações — sempre visível */}
           {notificationsSupported && (
             notificationPermission === 'denied' ? (
               <button
-                onClick={() => alert('Notificações bloqueadas.\nPara ativar: Configurações do navegador → Notificações → Permitir para este site.')}
+                onClick={() =>
+                  alert(
+                    'Notificações bloqueadas.\nPara ativar: Configurações do navegador → Notificações → Permitir para este site.'
+                  )
+                }
                 className="flex items-center gap-1.5 px-2 py-1.5 rounded-full bg-red-500/20 text-red-300 text-[9px] font-bold uppercase tracking-wider"
                 title="Notificações bloqueadas — toque para instruções"
               >
@@ -82,7 +116,9 @@ const AgentInbox: React.FC = () => {
                 title="Alertas ativos — toque para desativar"
               >
                 <Bell size={16} className="text-yellow-300" />
-                <span className="text-[9px] font-bold uppercase tracking-wider hidden sm:inline">Ativo</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider hidden sm:inline">
+                  Ativo
+                </span>
               </button>
             ) : (
               <button
@@ -107,7 +143,6 @@ const AgentInbox: React.FC = () => {
       }
     >
       <div className="flex flex-col h-full bg-white">
-        {/* Tabs */}
         <div className="flex border-b border-slate-100 bg-white px-2">
           {(['open', 'claimed', 'closed'] as ConversationStatus[]).map((tab) => (
             <button
@@ -126,7 +161,6 @@ const AgentInbox: React.FC = () => {
           ))}
         </div>
 
-        {/* List */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/30">
           {filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-slate-200">
@@ -143,6 +177,8 @@ const AgentInbox: React.FC = () => {
               )
               .map((conv) => {
                 const unread = hasUnreadFromClient(conv);
+                const memberName = getMemberName(conv);
+                const communityName = getCommunityName(conv);
 
                 return (
                   <div
@@ -152,12 +188,17 @@ const AgentInbox: React.FC = () => {
                   >
                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-redoma-dark opacity-0 group-hover:opacity-100 transition-opacity" />
 
-                    <div className="flex justify-between items-start mb-3">
-                      <span className="font-bold text-slate-800 group-hover:text-redoma-dark transition-colors">
-                        {conv.communityId}
-                      </span>
+                    <div className="flex justify-between items-start gap-4 mb-3">
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-800 group-hover:text-redoma-dark transition-colors truncate">
+                          {memberName}
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1 truncate">
+                          {communityName}
+                        </p>
+                      </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         {unread && conv.status !== 'closed' && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[9px] font-extrabold uppercase tracking-[0.16em]">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
@@ -186,12 +227,10 @@ const AgentInbox: React.FC = () => {
                         </span>
                       </div>
 
-                      {conv.claimed_by && (
-                        <div className="flex items-center gap-1.5">
-                          <User size={12} className="text-redoma-steel" />
-                          <span>{conv.claimed_by}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        <User size={12} className="text-redoma-steel" />
+                        <span>{conv.claimed_by || 'Não atribuído'}</span>
+                      </div>
                     </div>
                   </div>
                 );
