@@ -80,18 +80,91 @@ const normalizeConversation = (conv: any) => {
     ...conv,
     communityId: conv.communityId ?? conv.community_id ?? null,
     community_id: conv.community_id ?? conv.communityId ?? null,
-    member_name:
-      conv.member_name ??
-      conv.memberName ??
-      conv.members?.full_name ??
-      null,
+    member_name: conv.member_name ?? conv.memberName ?? null,
     community_name:
       conv.community_name ??
       conv.communityName ??
-      conv.communities?.name ??
       conv.community?.name ??
       null,
   };
+};
+
+const enrichConversations = async (
+  client: any,
+  rawConversations: any[]
+): Promise<any[]> => {
+  if (!rawConversations || rawConversations.length === 0) return [];
+
+  const normalized = rawConversations.map(normalizeConversation);
+
+  const memberIds = Array.from(
+    new Set(
+      normalized
+        .map((c) => c.member_id)
+        .filter((v) => v !== null && v !== undefined && v !== '')
+    )
+  );
+
+  const communityIds = Array.from(
+    new Set(
+      normalized
+        .map((c) => c.community_id ?? c.communityId)
+        .filter((v) => v !== null && v !== undefined && v !== '')
+    )
+  );
+
+  let memberMap: Record<string, string> = {};
+  let communityMap: Record<string, string> = {};
+
+  if (memberIds.length > 0) {
+    const { data: members, error: memberErr } = await client
+      .from('members')
+      .select('member_id, full_name')
+      .in('member_id', memberIds);
+
+    if (memberErr) {
+      console.error('[fetch members for conversations]', memberErr);
+    } else {
+      memberMap = Object.fromEntries(
+        ((members || []) as any[])
+          .filter((m) => m?.member_id)
+          .map((m) => [m.member_id, m.full_name || 'Usuário'])
+      );
+    }
+  }
+
+  if (communityIds.length > 0) {
+    const { data: communities, error: communityErr } = await client
+      .from('communities')
+      .select('id, name')
+      .in('id', communityIds);
+
+    if (communityErr) {
+      console.error('[fetch communities for conversations]', communityErr);
+    } else {
+      communityMap = Object.fromEntries(
+        ((communities || []) as any[])
+          .filter((c) => c?.id)
+          .map((c) => [c.id, c.name || 'Comunidade'])
+      );
+    }
+  }
+
+  return normalized.map((conv) => {
+    const communityId = conv.community_id ?? conv.communityId ?? null;
+
+    return {
+      ...conv,
+      member_name:
+        conv.member_name ??
+        (conv.member_id ? memberMap[conv.member_id] : null) ??
+        null,
+      community_name:
+        conv.community_name ??
+        (communityId ? communityMap[communityId] : null) ??
+        null,
+    };
+  });
 };
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -141,14 +214,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           normalizedConv.member_name ??
           existing.member_name ??
           existing.memberName ??
-          existing.members?.full_name ??
           null,
         community_name:
           normalizedConv.community_name ??
           existing.community_name ??
           existing.communityName ??
-          existing.communities?.name ??
-          existing.community?.name ??
           null,
         communityId:
           normalizedConv.communityId ??
@@ -271,21 +341,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       if (isAgent) {
         const { data: convs, error: convErr } = await supabaseSupport
           .from('conversations')
-          .select(`
-            *,
-            members (
-              full_name
-            ),
-            communities (
-              name
-            )
-          `);
+          .select('*');
 
         if (cancelled) return;
         if (convErr) console.error('[support fetch conversations]', convErr);
 
-        const normalizedConvs = ((convs || []) as any[]).map(normalizeConversation);
-        setConversations(normalizedConvs as Conversation[]);
+        const enrichedConvs = await enrichConversations(
+          supabaseSupport,
+          (convs || []) as any[]
+        );
+
+        if (cancelled) return;
+        setConversations(enrichedConvs as Conversation[]);
 
         const { data: msgs, error: msgErr } = await supabaseSupport
           .from('messages')
@@ -301,9 +368,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           .on(
             'postgres_changes' as any,
             { event: '*', schema: 'public', table: 'conversations' },
-            (p: any) => {
+            async (p: any) => {
               if (p?.new) {
-                upsertConversation(p.new);
+                const [enriched] = await enrichConversations(supabaseSupport, [p.new]);
+                if (!cancelled && enriched) {
+                  upsertConversation(enriched);
+                }
               }
             }
           )
@@ -342,7 +412,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (cancelled) return;
       if (convErr) console.error('[client fetch active conversation]', convErr);
-      setConversations(conv ? ([normalizeConversation(conv)] as Conversation[]) : []);
+
+      const enrichedClientConvs = conv
+        ? await enrichConversations(supabasePublic, [conv])
+        : [];
+
+      if (cancelled) return;
+      setConversations(enrichedClientConvs as Conversation[]);
 
       const { data: msgs, error: msgErr } = await supabasePublic
         .from('messages')
@@ -364,9 +440,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             table: 'conversations',
             filter: `id=eq.${activeConvId}`,
           },
-          (p: any) => {
+          async (p: any) => {
             if (p?.new) {
-              upsertConversation(p.new);
+              const [enriched] = await enrichConversations(supabasePublic, [p.new]);
+              if (!cancelled && enriched) {
+                upsertConversation(enriched);
+              }
             }
           }
         )
@@ -445,7 +524,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       .single();
 
     if (error) throw error;
-    if (data) upsertConversation(data as any);
+
+    if (data) {
+      const [enriched] = await enrichConversations(supabasePublic, [data]);
+      if (enriched) upsertConversation(enriched as any);
+    }
 
     setActiveConversationId(id);
     return id;
@@ -483,7 +566,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (error) {
       console.error('[addMessage] insert error', error);
       removeOptimisticMessage(optimisticId);
-      return;
+      throw error;
     }
 
     if (data) upsertMessage(data as Message);
@@ -529,7 +612,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (error) {
       console.error('[sendImageMessage] insert error', error);
       removeOptimisticMessage(optimisticId);
-      return;
+      throw error;
     }
 
     if (data) upsertMessage(data as Message);
@@ -547,7 +630,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       .single();
 
     if (error) throw error;
-    upsertConversation(data as Conversation);
+
+    if (data) {
+      const [enriched] = await enrichConversations(supabaseSupport, [data]);
+      if (enriched) upsertConversation(enriched as Conversation);
+    }
   };
 
   const closeConversation = async (conversationId: string) => {
@@ -561,7 +648,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       .single();
 
     if (error) throw error;
-    upsertConversation(data as Conversation);
+
+    if (data) {
+      const [enriched] = await enrichConversations(supabaseSupport, [data]);
+      if (enriched) upsertConversation(enriched as Conversation);
+    }
   };
 
   const getConversation = (id: string) => conversations.find((c) => c.id === id);
