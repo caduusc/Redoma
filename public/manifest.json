@@ -4,8 +4,8 @@
   "description": "Crescimento Inteligente para Comunidades",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0e1a",
-  "theme_color": "#0a0e1a",
+  "background_color": "#151E29",
+  "theme_color": "#1E2A3A",
   "orientation": "portrait",
   "icons": [
     {
