@@ -677,7 +677,7 @@ const ClientStart: React.FC = () => {
         {communitiesUsed.length > 0 && (
           <div className="space-y-3">
             <p className="text-sm text-slate-500">
-              Qual comunidade deseja contribuir hoje?
+              Comunidades apoiadas recentemente:
             </p>
 
             {loadingCommunities ? (
@@ -688,7 +688,7 @@ const ClientStart: React.FC = () => {
             ) : (
               <>
                 <p className="text-[11px] text-slate-500">
-                  Comunidades apoiadas recentemente:
+                  Apoie novamente 
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {communitiesUsed.map((cid) => (
