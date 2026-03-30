@@ -666,7 +666,7 @@ const ClientStart: React.FC = () => {
             className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
           >
             <Users size={18} className="group-hover:scale-110 transition-transform" />
-            Conheça as comunidades e projetos sociais que apoiamos
+            Escolha a comunidade que deseja apoiar
           </button>
 
           {loadingNames ? (
