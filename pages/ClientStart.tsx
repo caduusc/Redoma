@@ -72,7 +72,6 @@ const ClientStart: React.FC = () => {
     [fullName]
   );
 
-  const [communityInput, setCommunityInput] = useState('');
   const [communityError, setCommunityError] = useState<string | null>(null);
   const [loadingCommunities, setLoadingCommunities] = useState(false);
   const [submittingConversation, setSubmittingConversation] = useState(false);
@@ -468,11 +467,6 @@ const ClientStart: React.FC = () => {
     startConversationForCommunity(communityId);
   };
 
-  const handleSubmitNewCommunity = (e: React.FormEvent) => {
-    e.preventDefault();
-    startConversationForCommunity(communityInput);
-  };
-
   const handleContinueConversation = (conv: ConversationRow) => {
     setUnreadByConvId((prev) => ({
       ...prev,
@@ -680,70 +674,39 @@ const ClientStart: React.FC = () => {
           ) : null}
         </div>
 
-        <div className="space-y-3">
-          <p className="text-sm text-slate-500">
-            Qual comunidade deseja contribuir hoje?
-          </p>
+        {communitiesUsed.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-500">
+              Qual comunidade deseja contribuir hoje?
+            </p>
 
-          {loadingCommunities ? (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Loader2 className="animate-spin" size={14} />
-              Carregando comunidades...
-            </div>
-          ) : communitiesUsed.length > 0 ? (
-            <>
-              <p className="text-[11px] text-slate-500">
-                Comunidades apoiadas recentemente:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {communitiesUsed.map((cid) => (
-                  <button
-                    key={cid}
-                    type="button"
-                    onClick={() => handleSelectExistingCommunity(cid)}
-                    className="px-3 py-1.5 rounded-full border border-slate-200 text-[11px] text-slate-700 hover:border-redoma-steel hover:text-redoma-steel transition"
-                    title={cid}
-                  >
-                    {getCommunityLabel(cid)}
-                  </button>
-                ))}
+            {loadingCommunities ? (
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Loader2 className="animate-spin" size={14} />
+                Carregando comunidades...
               </div>
-            </>
-          ) : null}
-        </div>
-
-        <div className="pt-3 border-t border-slate-100 space-y-3">
-          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-            Outra comunidade
-          </p>
-          <form className="space-y-2" onSubmit={handleSubmitNewCommunity}>
-            <input
-              type="text"
-              placeholder="Ex: unidos-somos-fortes"
-              value={communityInput}
-              onChange={(e) => {
-                setCommunityInput(e.target.value);
-                if (communityError) setCommunityError(null);
-              }}
-              disabled={submittingConversation}
-              className={`${inputBase} border-slate-200 bg-slate-50/50 focus:ring-redoma-steel text-sm`}
-            />
-            <button
-              type="submit"
-              disabled={submittingConversation || !communityInput.trim()}
-              className="w-full bg-redoma-dark text-white font-bold py-4 rounded-2xl hover:bg-redoma-navy transition-all shadow-lg active:scale-[0.98] uppercase tracking-widest text-xs disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {submittingConversation ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>Iniciando...</span>
-                </>
-              ) : (
-                <span>Iniciar novo atendimento</span>
-              )}
-            </button>
-          </form>
-        </div>
+            ) : (
+              <>
+                <p className="text-[11px] text-slate-500">
+                  Comunidades apoiadas recentemente:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {communitiesUsed.map((cid) => (
+                    <button
+                      key={cid}
+                      type="button"
+                      onClick={() => handleSelectExistingCommunity(cid)}
+                      className="px-3 py-1.5 rounded-full border border-slate-200 text-[11px] text-slate-700 hover:border-redoma-steel hover:text-redoma-steel transition"
+                      title={cid}
+                    >
+                      {getCommunityLabel(cid)}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="px-6 pb-5 pt-0 flex justify-between items-center border-t border-slate-100 mt-4">

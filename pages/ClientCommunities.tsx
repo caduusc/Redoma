@@ -61,14 +61,6 @@ const ClientCommunities: React.FC = () => {
     navigate(`/client/start?community=${encodeURIComponent(publicId)}`);
   };
 
-  const handleCopyId = async (publicId: string) => {
-    try {
-      await navigator.clipboard?.writeText(publicId);
-    } catch (err) {
-      console.error('[ClientCommunities] copy error', err);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-redoma-light flex flex-col items-center justify-start p-6 relative overflow-hidden">
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
@@ -100,7 +92,7 @@ const ClientCommunities: React.FC = () => {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nome, slug ou ID..."
+              placeholder="Buscar por nome ou descrição..."
               className="w-full outline-none text-sm text-slate-700 placeholder:text-slate-300"
             />
           </div>
@@ -148,12 +140,6 @@ const ClientCommunities: React.FC = () => {
                             {c.name?.charAt(0) || 'C'}
                           </div>
                         )}
-
-                        <div className="mt-3 flex flex-wrap justify-center md:justify-start gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 text-slate-600">
-                            ID: {publicId}
-                          </span>
-                        </div>
                       </div>
 
                       <div className="min-w-0 flex-1">
@@ -165,7 +151,7 @@ const ClientCommunities: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="mt-auto pt-5 space-y-2">
+                    <div className="mt-auto pt-5">
                       <button
                         type="button"
                         onClick={() => handleChooseCommunity(publicId)}
@@ -173,18 +159,6 @@ const ClientCommunities: React.FC = () => {
                       >
                         Apoiar
                       </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleCopyId(publicId)}
-                        className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-[10px] uppercase tracking-widest hover:bg-slate-100 transition"
-                      >
-                        Copiar ID
-                      </button>
-
-                      <p className="text-[10px] text-slate-400 mt-2">
-                        Você será levado direto para o atendimento desta comunidade.
-                      </p>
                     </div>
                   </div>
                 );
@@ -201,7 +175,7 @@ const ClientCommunities: React.FC = () => {
             onClick={() => navigate('/client/start')}
             className="text-[10px] text-redoma-steel font-bold hover:text-redoma-dark uppercase tracking-widest"
           >
-            Voltar para iniciar atendimento
+            Voltar
           </button>
         </div>
       </div>
