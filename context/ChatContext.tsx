@@ -310,7 +310,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     setAgentToast(null);
   }, []);
 
+  // ─── Refs estáveis para callbacks ────────────────────────────────────────────
+  // Mantém sempre a versão mais recente das callbacks sem causar re-subscription.
+  // Sem isso, qualquer mudança em activeConvId recriava os channels do agente.
+  const upsertMessageRef = useRef(upsertMessage);
+  useEffect(() => { upsertMessageRef.current = upsertMessage; }, [upsertMessage]);
+
+  const upsertConversationRef = useRef(upsertConversation);
+  useEffect(() => { upsertConversationRef.current = upsertConversation; }, [upsertConversation]);
+
+  // ─── Efeito 1: AGENTE ────────────────────────────────────────────────────────
+  // Só re-executa quando isAgent muda (login/logout).
+  // NÃO depende de activeConvId — o agente escuta tudo sem filtro.
   useEffect(() => {
+    if (!isAgent) return;
+
     let convChannel: any;
     let msgChannel: any;
     let cancelled = false;
@@ -319,78 +333,109 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         if (convChannel) {
           await convChannel.unsubscribe?.();
-          // @ts-ignore
-          supabasePublic.removeChannel?.(convChannel);
-          // @ts-ignore
-          supabaseSupport.removeChannel?.(convChannel);
+          (supabaseSupport as any).removeChannel?.(convChannel);
         }
       } catch {}
-
       try {
         if (msgChannel) {
           await msgChannel.unsubscribe?.();
-          // @ts-ignore
-          supabasePublic.removeChannel?.(msgChannel);
-          // @ts-ignore
-          supabaseSupport.removeChannel?.(msgChannel);
+          (supabaseSupport as any).removeChannel?.(msgChannel);
         }
       } catch {}
     };
 
     const boot = async () => {
-      if (isAgent) {
-        const { data: convs, error: convErr } = await supabaseSupport
-          .from('conversations')
-          .select('*');
+      const { data: convs, error: convErr } = await supabaseSupport
+        .from('conversations')
+        .select('*');
 
-        if (cancelled) return;
-        if (convErr) console.error('[support fetch conversations]', convErr);
+      if (cancelled) return;
+      if (convErr) console.error('[support fetch conversations]', convErr);
 
-        const enrichedConvs = await enrichConversations(
-          supabaseSupport,
-          (convs || []) as any[]
-        );
+      const enrichedConvs = await enrichConversations(
+        supabaseSupport,
+        (convs || []) as any[]
+      );
 
-        if (cancelled) return;
-        setConversations(enrichedConvs as Conversation[]);
+      if (cancelled) return;
+      setConversations(enrichedConvs as Conversation[]);
 
-        const { data: msgs, error: msgErr } = await supabaseSupport
-          .from('messages')
-          .select('*')
-          .order('created_at', { ascending: true });
+      const { data: msgs, error: msgErr } = await supabaseSupport
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: true });
 
-        if (cancelled) return;
-        if (msgErr) console.error('[support fetch messages]', msgErr);
-        setMessages((msgs || []) as Message[]);
+      if (cancelled) return;
+      if (msgErr) console.error('[support fetch messages]', msgErr);
+      setMessages((msgs || []) as Message[]);
 
-        convChannel = supabaseSupport
-          .channel('support_convs')
-          .on(
-            'postgres_changes' as any,
-            { event: '*', schema: 'public', table: 'conversations' },
-            async (p: any) => {
-              if (p?.new) {
-                const [enriched] = await enrichConversations(supabaseSupport, [p.new]);
-                if (!cancelled && enriched) {
-                  upsertConversation(enriched);
-                }
+      convChannel = supabaseSupport
+        .channel('support_convs')
+        .on(
+          'postgres_changes' as any,
+          { event: '*', schema: 'public', table: 'conversations' },
+          async (p: any) => {
+            if (p?.new) {
+              const [enriched] = await enrichConversations(supabaseSupport, [p.new]);
+              if (!cancelled && enriched) {
+                upsertConversationRef.current(enriched);
               }
             }
-          )
-          .subscribe();
+          }
+        )
+        .subscribe((status: string) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.error('[realtime] support_convs error — verifique Replication no Supabase Dashboard');
+          }
+        });
 
-        msgChannel = supabaseSupport
-          .channel('support_msgs')
-          .on(
-            'postgres_changes' as any,
-            { event: 'INSERT', schema: 'public', table: 'messages' },
-            (p: any) => p?.new && upsertMessage(p.new as Message)
-          )
-          .subscribe();
+      msgChannel = supabaseSupport
+        .channel('support_msgs')
+        .on(
+          'postgres_changes' as any,
+          { event: 'INSERT', schema: 'public', table: 'messages' },
+          (p: any) => p?.new && upsertMessageRef.current(p.new as Message)
+        )
+        .subscribe((status: string) => {
+          if (status === 'CHANNEL_ERROR') {
+            console.error('[realtime] support_msgs error — verifique Replication no Supabase Dashboard');
+          }
+        });
+    };
 
-        return;
-      }
+    boot();
 
+    return () => {
+      cancelled = true;
+      void safeUnsub();
+    };
+  }, [isAgent]); // ← APENAS isAgent. Nunca recria por activeConvId.
+
+  // ─── Efeito 2: CLIENTE ───────────────────────────────────────────────────────
+  // Re-executa quando a conversa ativa muda (necessário — o filtro muda).
+  useEffect(() => {
+    if (isAgent) return;
+
+    let convChannel: any;
+    let msgChannel: any;
+    let cancelled = false;
+
+    const safeUnsub = async () => {
+      try {
+        if (convChannel) {
+          await convChannel.unsubscribe?.();
+          (supabasePublic as any).removeChannel?.(convChannel);
+        }
+      } catch {}
+      try {
+        if (msgChannel) {
+          await msgChannel.unsubscribe?.();
+          (supabasePublic as any).removeChannel?.(msgChannel);
+        }
+      } catch {}
+    };
+
+    const boot = async () => {
       try {
         await ensureClientAuthReady();
       } catch (e) {
@@ -444,7 +489,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             if (p?.new) {
               const [enriched] = await enrichConversations(supabasePublic, [p.new]);
               if (!cancelled && enriched) {
-                upsertConversation(enriched);
+                upsertConversationRef.current(enriched);
               }
             }
           }
@@ -461,7 +506,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
             table: 'messages',
             filter: `conversation_id=eq.${activeConvId}`,
           },
-          (p: any) => p?.new && upsertMessage(p.new as Message)
+          (p: any) => p?.new && upsertMessageRef.current(p.new as Message)
         )
         .subscribe();
     };
@@ -472,7 +517,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       cancelled = true;
       void safeUnsub();
     };
-  }, [isAgent, activeConvId, upsertConversation, upsertMessage]);
+  }, [isAgent, activeConvId]);
 
   const login = (email: string) => {
     const user: User = {
