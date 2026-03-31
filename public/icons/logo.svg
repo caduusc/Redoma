@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Fundo escuro quadrado (necessário para PWA maskable) -->
-  <rect width="512" height="512" fill="#1E2A3A"/>
+  <!-- Fundo branco -->
+  <rect width="512" height="512" fill="#FFFFFF"/>
 
-  <!-- Esfera principal - gradiente de fundo -->
+  <!-- Gradientes -->
   <defs>
     <radialGradient id="sphereGrad" cx="42%" cy="38%" r="58%">
       <stop offset="0%" stop-color="#2E4A6A"/>
@@ -21,25 +21,19 @@
   <!-- Corpo da esfera -->
   <circle cx="256" cy="256" r="195" fill="url(#sphereGrad)"/>
 
-  <!-- Brilho interno (glow) -->
+  <!-- Brilho interno -->
   <circle cx="256" cy="256" r="195" fill="url(#glowGrad)"/>
 
-  <!-- Anéis orbitais (elipses inclinadas) -->
+  <!-- Anéis orbitais -->
   <g clip-path="url(#sphereClip)" fill="none" stroke="#6BAED6" stroke-opacity="0.45">
-    <!-- Anel externo grande -->
     <ellipse cx="256" cy="256" rx="175" ry="60" stroke-width="1.5" transform="rotate(-15 256 256)"/>
-    <!-- Anel médio -->
     <ellipse cx="256" cy="256" rx="130" ry="44" stroke-width="1.2" transform="rotate(-15 256 256)"/>
-    <!-- Anel interno -->
     <ellipse cx="256" cy="256" rx="85" ry="28" stroke-width="1" transform="rotate(-15 256 256)"/>
   </g>
 
   <!-- Estrelas / pontos orbitais -->
-  <!-- Ponto grande (planeta principal) -->
   <circle cx="310" cy="288" r="18" fill="#F0EED4"/>
-  <!-- Ponto médio -->
   <circle cx="200" cy="230" r="10" fill="#E8E6C8"/>
-  <!-- Pontos pequenos -->
   <circle cx="255" cy="180" r="6"  fill="#D8D6B8"/>
   <circle cx="290" cy="215" r="5"  fill="#D0CEB0"/>
   <circle cx="175" cy="268" r="5"  fill="#D0CEB0"/>
@@ -51,9 +45,9 @@
   <circle cx="190" cy="310" r="2.5" fill="#B0AE90"/>
   <circle cx="335" cy="310" r="2.5" fill="#B0AE90"/>
 
-  <!-- Borda externa da esfera (reflexo) -->
+  <!-- Borda externa da esfera -->
   <circle cx="256" cy="256" r="195" fill="none" stroke="#7BAFC8" stroke-width="2.5" stroke-opacity="0.6"/>
 
-  <!-- Reflexo superior esquerdo (brilho) -->
+  <!-- Reflexo superior -->
   <ellipse cx="210" cy="185" rx="55" ry="30" fill="none" stroke="#B8D8EC" stroke-width="1.5" stroke-opacity="0.5" transform="rotate(-30 210 185)"/>
 </svg>
