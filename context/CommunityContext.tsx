@@ -70,7 +70,12 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return;
       }
 
-      // Seed se tabela estiver vazia
+      // Seed apenas em desenvolvimento — evita recriar dados se alguém apagar tudo em produção
+      if ((import.meta as any).env?.PROD) {
+        console.warn('[CommunityContext] tabela vazia em produção — seed bloqueado');
+        return;
+      }
+
       const { data: seeded, error: seedErr } = await supabaseMaster
         .from('communities')
         .insert(

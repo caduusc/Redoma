@@ -69,7 +69,12 @@ export const ProviderProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
 
-      // Seed se tabela estiver vazia
+      // Seed apenas em desenvolvimento — evita recriar dados se alguém apagar tudo em produção
+      if ((import.meta as any).env?.PROD) {
+        console.warn('[ProviderContext] tabela vazia em produção — seed bloqueado');
+        return;
+      }
+
       const { data: seeded, error: seedErr } = await supabaseMaster
         .from('providers')
         .insert(
