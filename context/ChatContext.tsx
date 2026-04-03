@@ -201,9 +201,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   // autoGreetingSentRef: convIds onde a MSG 1 já foi enviada (evita duplicatas)
   // agentDelayTimerRef:  timer de 45s por conversa (MSG 2)
   // autoMsg2SentRef:     controla se a MSG 2 já foi enviada no período atual de espera
+  // suppressAutoMsgRef:  convId → timestamp de expiração (5s)
+  //
+  // BUG CORRIGIDO: quando a MSG 1 chegava de volta via Realtime (sender_type='agent'),
+  // o upsertMessage interpretava como resposta real do atendente e cancelava o timer
+  // de 45s logo após criá-lo — a MSG 2 nunca disparava.
+  // Solução: antes de enviar qualquer auto-mensagem, marcamos a conversa em
+  // suppressAutoMsgRef por 5s. O upsertMessage consulta esse ref e ignora o evento
+  // Realtime da auto-mensagem, preservando o timer intacto.
   const autoGreetingSentRef = useRef<Set<string>>(new Set());
   const agentDelayTimerRef  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const autoMsg2SentRef     = useRef<Set<string>>(new Set());
+  const suppressAutoMsgRef  = useRef<Map<string, number>>(new Map());
 
   const MSG_GREETING =
     'Olá! Já recebemos sua mensagem, um atendente já virá te atender. ' +
@@ -214,8 +223,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     'Estamos com um volume de atendimento acima do esperado, em breve ' +
     'já iremos te atender. Fique tranquilo pois iremos te notificar.';
 
-  // Envia uma mensagem automática via RPC (SECURITY DEFINER — ignora RLS)
+  // Envia uma mensagem automática via RPC (SECURITY DEFINER — ignora RLS).
+  // Registra a conversa em suppressAutoMsgRef por 5s antes da chamada para
+  // que o evento Realtime dessa mensagem seja ignorado no upsertMessage.
   const sendAutoMessage = useCallback(async (convId: string, text: string) => {
+    suppressAutoMsgRef.current.set(convId, Date.now() + 5_000);
     try {
       const { error } = await supabasePublic.rpc('send_auto_message', {
         p_conversation_id: convId,
@@ -298,16 +310,25 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       return next;
     });
 
-    // ─── Cancelar timer de 45s quando o agente responder ───────────────────────
-    // Isso cobre o caso em que o agente responde via Realtime (lado do cliente).
-    // Também reseta o autoMsg2SentRef para que, se o cliente mandar nova mensagem
-    // e o agente demorar de novo, a MSG 2 seja enviada novamente.
+    // ─── Cancelar timer de 45s apenas quando o ATENDENTE REAL responder ────────
+    // Mensagens automáticas (MSG 1 / MSG 2) também chegam com sender_type='agent'
+    // via Realtime. Sem o controle abaixo, elas cancelariam o timer de 45s por engano.
+    // suppressAutoMsgRef marca a janela de 5s após cada sendAutoMessage().
     if (msg.sender_type === 'agent') {
-      if (agentDelayTimerRef.current[msg.conversation_id]) {
-        clearTimeout(agentDelayTimerRef.current[msg.conversation_id]);
-        delete agentDelayTimerRef.current[msg.conversation_id];
+      const suppressUntil = suppressAutoMsgRef.current.get(msg.conversation_id);
+      const isAutoMsg = suppressUntil !== undefined && Date.now() < suppressUntil;
+
+      if (isAutoMsg) {
+        // Retorno da auto-mensagem via Realtime — limpa a supressão e não faz nada
+        suppressAutoMsgRef.current.delete(msg.conversation_id);
+      } else {
+        // Resposta real do atendente — cancela o timer e libera a MSG 2 p/ próxima inatividade
+        if (agentDelayTimerRef.current[msg.conversation_id]) {
+          clearTimeout(agentDelayTimerRef.current[msg.conversation_id]);
+          delete agentDelayTimerRef.current[msg.conversation_id];
+        }
+        autoMsg2SentRef.current.delete(msg.conversation_id);
       }
-      autoMsg2SentRef.current.delete(msg.conversation_id);
     }
     // ───────────────────────────────────────────────────────────────────────────
 
@@ -461,7 +482,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       cancelled = true;
       void safeUnsub();
     };
-  }, [isAgent]); // ← APENAS isAgent. Nunca recria por activeConvId.
+  }, [isAgent]);
 
   // ─── Efeito 2: CLIENTE ───────────────────────────────────────────────────────
   // Re-executa quando a conversa ativa muda (necessário — o filtro muda).
@@ -656,8 +677,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         setTimeout(() => sendAutoMessage(conversationId, MSG_GREETING), 800);
       }
 
-      // MSG 2 — reinicia o timer de 45s a cada mensagem do cliente
-      // Se já existe um timer anterior, cancela antes de criar um novo
+      // MSG 2 — reinicia o timer de 45s a cada mensagem do cliente.
+      // Se já existe um timer anterior, cancela antes de criar um novo.
       clearAgentDelayTimer(conversationId);
       agentDelayTimerRef.current[conversationId] = setTimeout(() => {
         if (!autoMsg2SentRef.current.has(conversationId)) {
