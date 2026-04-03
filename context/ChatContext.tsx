@@ -199,20 +199,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // ─── Refs para auto-mensagens de suporte ─────────────────────────────────────
   // autoGreetingSentRef: convIds onde a MSG 1 já foi enviada (evita duplicatas)
-  // agentDelayTimerRef:  timer de 45s por conversa (MSG 2)
+  // agentDelayTimerRef:  mapa de timers de 45s por conversa (MSG 2)
   // autoMsg2SentRef:     controla se a MSG 2 já foi enviada no período atual de espera
-  // suppressAutoMsgRef:  convId → timestamp de expiração (5s)
+  // autoMessageIdsRef:   IDs exatos das mensagens automáticas inseridas via RPC.
   //
-  // BUG CORRIGIDO: quando a MSG 1 chegava de volta via Realtime (sender_type='agent'),
-  // o upsertMessage interpretava como resposta real do atendente e cancelava o timer
-  // de 45s logo após criá-lo — a MSG 2 nunca disparava.
-  // Solução: antes de enviar qualquer auto-mensagem, marcamos a conversa em
-  // suppressAutoMsgRef por 5s. O upsertMessage consulta esse ref e ignora o evento
-  // Realtime da auto-mensagem, preservando o timer intacto.
+  // Este é o mecanismo central de distinção: quando o Realtime devolve uma mensagem
+  // com sender_type='agent', verificamos se o ID está neste Set. Se estiver, é uma
+  // auto-mensagem do sistema e NÃO cancelamos o timer de 45s. Se não estiver, é uma
+  // resposta real do atendente e cancelamos o timer normalmente.
+  //
+  // A solução anterior usava uma janela de tempo (suppressAutoMsgRef, 5s) que era
+  // frágil: se o Realtime demorasse mais que 5s, a MSG 1 era confundida com resposta
+  // real do atendente e o timer de 45s era cancelado incorretamente.
   const autoGreetingSentRef = useRef<Set<string>>(new Set());
   const agentDelayTimerRef  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const autoMsg2SentRef     = useRef<Set<string>>(new Set());
-  const suppressAutoMsgRef  = useRef<Map<string, number>>(new Map());
+  const autoMessageIdsRef   = useRef<Set<string>>(new Set());
 
   const MSG_GREETING =
     'Olá! Já recebemos sua mensagem, um atendente já virá te atender. ' +
@@ -224,16 +226,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     'já iremos te atender. Fique tranquilo pois iremos te notificar.';
 
   // Envia uma mensagem automática via RPC (SECURITY DEFINER — ignora RLS).
-  // Registra a conversa em suppressAutoMsgRef por 5s antes da chamada para
-  // que o evento Realtime dessa mensagem seja ignorado no upsertMessage.
+  // A função SQL agora retorna o ID da mensagem inserida, que é registrado em
+  // autoMessageIdsRef para que o upsertMessage saiba ignorá-la na lógica do timer.
   const sendAutoMessage = useCallback(async (convId: string, text: string) => {
-    suppressAutoMsgRef.current.set(convId, Date.now() + 5_000);
     try {
-      const { error } = await supabasePublic.rpc('send_auto_message', {
+      const { data: msgId, error } = await supabasePublic.rpc('send_auto_message', {
         p_conversation_id: convId,
         p_text: text,
       });
-      if (error) console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
+      if (error) {
+        console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
+        return;
+      }
+      // Registra o ID para que o Realtime dessa mensagem seja ignorado no upsertMessage
+      if (msgId) autoMessageIdsRef.current.add(msgId as string);
     } catch (err) {
       console.error('[AutoMsg] Exceção ao enviar mensagem automática:', err);
     }
@@ -311,18 +317,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     // ─── Cancelar timer de 45s apenas quando o ATENDENTE REAL responder ────────
-    // Mensagens automáticas (MSG 1 / MSG 2) também chegam com sender_type='agent'
-    // via Realtime. Sem o controle abaixo, elas cancelariam o timer de 45s por engano.
-    // suppressAutoMsgRef marca a janela de 5s após cada sendAutoMessage().
+    // Mensagens automáticas (MSG 1 / MSG 2) têm sender_type='agent' e chegam via
+    // Realtime igual às respostas humanas. A distinção é feita pelo ID exato:
+    // autoMessageIdsRef guarda os IDs retornados pelo RPC — qualquer mensagem cujo
+    // ID esteja nesse Set é do sistema e não deve cancelar o timer de 45s.
     if (msg.sender_type === 'agent') {
-      const suppressUntil = suppressAutoMsgRef.current.get(msg.conversation_id);
-      const isAutoMsg = suppressUntil !== undefined && Date.now() < suppressUntil;
-
-      if (isAutoMsg) {
-        // Retorno da auto-mensagem via Realtime — limpa a supressão e não faz nada
-        suppressAutoMsgRef.current.delete(msg.conversation_id);
+      if (autoMessageIdsRef.current.has(msg.id)) {
+        // É uma auto-mensagem voltando via Realtime — remove do Set e ignora
+        autoMessageIdsRef.current.delete(msg.id);
       } else {
-        // Resposta real do atendente — cancela o timer e libera a MSG 2 p/ próxima inatividade
+        // É resposta real do atendente — cancela o timer e reseta o controle da MSG 2
         if (agentDelayTimerRef.current[msg.conversation_id]) {
           clearTimeout(agentDelayTimerRef.current[msg.conversation_id]);
           delete agentDelayTimerRef.current[msg.conversation_id];
