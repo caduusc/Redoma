@@ -217,13 +217,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const autoMessageIdsRef   = useRef<Set<string>>(new Set());
 
   const MSG_GREETING =
-    'Olá! Já recebemos sua mensagem, um atendente já virá te atender. ' +
-    'Caso precise sair do aplicativo, não tem problema! Te enviaremos ' +
-    'notificação no whatsapp cadastrado assim que um atendente te responder.';
+  'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
+  'Em instantes um atendente irá te responder.\n\n' +
+  'Se precisar sair do aplicativo, fique tranquilo, ' +
+  'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
 
   const MSG_DELAY =
-    'Estamos com um volume de atendimento acima do esperado, em breve ' +
-    'já iremos te atender. Fique tranquilo pois iremos te notificar.';
+  'Estamos com um volume de atendimentos acima do normal no momento, ' +
+  'mas sua solicitação já está na fila e será atendida em breve.\n\n' +
+  'Assim que um atendente assumir seu atendimento, você será notificado.';
 
   // Envia uma mensagem automática via RPC (SECURITY DEFINER — ignora RLS).
   // A função SQL agora retorna o ID da mensagem inserida, que é registrado em
