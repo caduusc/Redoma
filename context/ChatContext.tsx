@@ -692,7 +692,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           sendAutoMessage(conversationId, MSG_DELAY);
         }
         delete agentDelayTimerRef.current[conversationId];
-      }, 45_000);
+      }, 30_000);
     }
     // ───────────────────────────────────────────────────────────────────────────
 
