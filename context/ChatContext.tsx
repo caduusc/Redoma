@@ -57,7 +57,7 @@ interface ChatContextType {
 
   setActiveConversationId: (id: string | null) => void;
 
-  notificationPermission: 'default' | 'granted' | 'denied';
+  notificationPermission: 'default' | 'granted' | 'denied' | 'unsupported';
   notificationsEnabled: boolean;
   notificationsSupported: boolean;
   requestNotificationPermission: () => Promise<boolean>;
@@ -197,6 +197,45 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const notifiedMsgIds = useRef<Set<string>>(new Set());
 
+  // ─── Refs para auto-mensagens de suporte ─────────────────────────────────────
+  // autoGreetingSentRef: convIds onde a MSG 1 já foi enviada (evita duplicatas)
+  // agentDelayTimerRef:  timer de 45s por conversa (MSG 2)
+  // autoMsg2SentRef:     controla se a MSG 2 já foi enviada no período atual de espera
+  const autoGreetingSentRef = useRef<Set<string>>(new Set());
+  const agentDelayTimerRef  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const autoMsg2SentRef     = useRef<Set<string>>(new Set());
+
+  const MSG_GREETING =
+    'Olá! Já recebemos sua mensagem, um atendente já virá te atender. ' +
+    'Caso precise sair do aplicativo, não tem problema! Te enviaremos ' +
+    'notificação no whatsapp cadastrado assim que um atendente te responder.';
+
+  const MSG_DELAY =
+    'Estamos com um volume de atendimento acima do esperado, em breve ' +
+    'já iremos te atender. Fique tranquilo pois iremos te notificar.';
+
+  // Envia uma mensagem automática via RPC (SECURITY DEFINER — ignora RLS)
+  const sendAutoMessage = useCallback(async (convId: string, text: string) => {
+    try {
+      const { error } = await supabasePublic.rpc('send_auto_message', {
+        p_conversation_id: convId,
+        p_text: text,
+      });
+      if (error) console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
+    } catch (err) {
+      console.error('[AutoMsg] Exceção ao enviar mensagem automática:', err);
+    }
+  }, []);
+
+  // Cancela o timer de 45s de uma conversa específica
+  const clearAgentDelayTimer = useCallback((convId: string) => {
+    if (agentDelayTimerRef.current[convId]) {
+      clearTimeout(agentDelayTimerRef.current[convId]);
+      delete agentDelayTimerRef.current[convId];
+    }
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const upsertConversation = useCallback((conv: Conversation | any) => {
     const normalizedConv = normalizeConversation(conv);
 
@@ -258,6 +297,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       return next;
     });
+
+    // ─── Cancelar timer de 45s quando o agente responder ───────────────────────
+    // Isso cobre o caso em que o agente responde via Realtime (lado do cliente).
+    // Também reseta o autoMsg2SentRef para que, se o cliente mandar nova mensagem
+    // e o agente demorar de novo, a MSG 2 seja enviada novamente.
+    if (msg.sender_type === 'agent') {
+      if (agentDelayTimerRef.current[msg.conversation_id]) {
+        clearTimeout(agentDelayTimerRef.current[msg.conversation_id]);
+        delete agentDelayTimerRef.current[msg.conversation_id];
+      }
+      autoMsg2SentRef.current.delete(msg.conversation_id);
+    }
+    // ───────────────────────────────────────────────────────────────────────────
 
     if (
       isAgent &&
@@ -541,7 +593,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     const clientToken = localStorage.getItem(CLIENT_TOKEN_KEY)!;
 
     const id =
-      (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
+      crypto.randomUUID?.() ??
       Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     let memberId: string | null = null;
@@ -586,8 +638,39 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     if (senderType !== 'agent') await ensureClientAuthReady();
 
+    // ─── Auto-mensagens de suporte ──────────────────────────────────────────────
+    // Executado apenas no lado do cliente (não do agente) para evitar duplicatas.
+    if (senderType === 'client') {
+      // Conta mensagens do cliente já existentes ANTES deste insert (otimista)
+      const existingClientMsgs = messages.filter(
+        (m) => m.conversation_id === conversationId && m.sender_type === 'client'
+      );
+
+      // MSG 1 — dispara apenas na primeira mensagem deste chat
+      if (
+        existingClientMsgs.length === 0 &&
+        !autoGreetingSentRef.current.has(conversationId)
+      ) {
+        autoGreetingSentRef.current.add(conversationId);
+        // Delay de 800ms para parecer mais natural
+        setTimeout(() => sendAutoMessage(conversationId, MSG_GREETING), 800);
+      }
+
+      // MSG 2 — reinicia o timer de 45s a cada mensagem do cliente
+      // Se já existe um timer anterior, cancela antes de criar um novo
+      clearAgentDelayTimer(conversationId);
+      agentDelayTimerRef.current[conversationId] = setTimeout(() => {
+        if (!autoMsg2SentRef.current.has(conversationId)) {
+          autoMsg2SentRef.current.add(conversationId);
+          sendAutoMessage(conversationId, MSG_DELAY);
+        }
+        delete agentDelayTimerRef.current[conversationId];
+      }, 45_000);
+    }
+    // ───────────────────────────────────────────────────────────────────────────
+
     const optimisticId =
-      (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
+      crypto.randomUUID?.() ??
       Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     const payload = {
@@ -631,7 +714,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     const optimisticId =
-      (typeof crypto !== 'undefined' && crypto.randomUUID?.()) ??
+      crypto.randomUUID?.() ??
       Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     const payload = {
