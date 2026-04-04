@@ -324,14 +324,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // ─── Lógica do timer de 45s (MSG 2) — roda no browser do AGENTE ──────────
     if (msg.sender_type === 'agent') {
-      if (autoMessageIdsRef.current.has(msg.id)) {
-        // É uma auto-mensagem (MSG 1 ou MSG 2) voltando via Realtime — ignora
-        autoMessageIdsRef.current.delete(msg.id);
-      } else {
+      // is_auto vem do banco (coluna messages.is_auto) e é a fonte de verdade:
+      // autoMessageIdsRef só existe no browser que enviou a mensagem, então não
+      // é confiável no browser do agente para mensagens enviadas pelo cliente.
+      const isAutoMsg = (msg as any).is_auto === true || autoMessageIdsRef.current.has(msg.id);
+      autoMessageIdsRef.current.delete(msg.id);
+
+      if (!isAutoMsg) {
         // É resposta real do agente — cancela o timer e libera MSG 2 p/ próxima inatividade
         clearAgentDelayTimer(msg.conversation_id);
         autoMsg2SentRef.current.delete(msg.conversation_id);
       }
+      // Se isAutoMsg === true: ignora silenciosamente, timer continua rodando
     }
 
     if (msg.sender_type === 'client' && isAgent) {
