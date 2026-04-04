@@ -214,9 +214,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const autoMessageIdsRef   = useRef<Set<string>>(new Set());
 
   const MSG_GREETING =
-    'Olá! Já recebemos sua mensagem, um atendente já virá te atender. ' +
-    'Caso precise sair do aplicativo, não tem problema! Te enviaremos ' +
-    'notificação no whatsapp cadastrado assim que um atendente te responder.';
+  'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
+  'Em instantes um atendente irá te responder.\n\n' +
+  'Se precisar sair do aplicativo, fique tranquilo — ' +
+  'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
 
   // Envia a MSG 1 via RPC (SECURITY DEFINER — ignora RLS).
   // ID gerado antes do RPC para garantir que o Realtime nunca chegue antes do registro.
@@ -534,6 +535,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               const [enriched] = await enrichConversations(supabasePublic, [p.new]);
               if (!cancelled && enriched) {
                 upsertConversationRef.current(enriched);
+              }
+
+              // Quando o pg_cron envia a MSG 2, ele atualiza auto_delay_msg_sent=true.
+              // O Realtime entrega o evento de conversa ao cliente, mas pode não
+              // entregar o INSERT da mensagem (RLS do role postgres vs anon).
+              // Re-buscamos as mensagens para garantir que a MSG 2 apareça sem refresh.
+              if (p.new.auto_delay_msg_sent === true) {
+                const { data: freshMsgs } = await supabasePublic
+                  .from('messages')
+                  .select('*')
+                  .eq('conversation_id', activeConvId)
+                  .order('created_at', { ascending: true });
+                if (!cancelled && freshMsgs) {
+                  (freshMsgs as Message[]).forEach((m) => upsertMessageRef.current(m));
+                }
               }
             }
           }
