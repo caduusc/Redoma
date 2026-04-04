@@ -216,7 +216,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const MSG_GREETING =
   'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
   'Em instantes um atendente irá te responder.\n\n' +
-  'Se precisar sair do aplicativo, fique tranquilo, ' +
+  'Se precisar sair do aplicativo, fique tranquilo — ' +
   'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
 
   // Envia a MSG 1 via RPC (SECURITY DEFINER — ignora RLS).
@@ -573,11 +573,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         .subscribe();
     };
 
-    boot();
-
-    // Polling a cada 30s como fallback para mensagens do pg_cron que o Realtime
-    // pode não entregar ao cliente (limitação de RLS com role postgres).
-    pollInterval = setInterval(async () => {
+    const fetchFreshMessages = async () => {
       if (cancelled || !activeConvId) return;
       const { data: freshMsgs } = await supabasePublic
         .from('messages')
@@ -587,10 +583,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!cancelled && freshMsgs) {
         (freshMsgs as Message[]).forEach((m) => upsertMessageRef.current(m));
       }
-    }, 5_000);
+    };
+
+    boot();
+
+    // Polling a cada 30s como fallback para mensagens do pg_cron que o Realtime
+    // pode não entregar ao cliente (limitação de RLS com role postgres).
+    pollInterval = setInterval(fetchFreshMessages, 30_000);
+
+    // Page Visibility API: quando o usuário retorna à aba (vinda de outra aba,
+    // minimização ou fechamento/reabertura), busca mensagens imediatamente sem
+    // esperar o próximo ciclo do polling.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchFreshMessages();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       void safeUnsub();
     };
   }, [isAgent, activeConvId]);
