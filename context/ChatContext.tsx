@@ -601,7 +601,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-    const interval = setInterval(refresh, 15_000);
+    const interval = setInterval(refresh, 1_000);
 
     // visibilitychange: troca de aba no desktop
     // pageshow: retorno de app/aba no mobile (inclui bfcache do iOS/Android)
