@@ -220,18 +220,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const autoMsg2SentRef     = useRef<Set<string>>(new Set());
 
   const MSG_GREETING =
-  'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
-  'Em instantes um atendente irá te responder.\n\n' +
-  'Se precisar sair do aplicativo, fique tranquilo, ' +
-  'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
+    'Olá! Já recebemos sua mensagem, um atendente já virá te atender. ' +
+    'Caso precise sair do aplicativo, não tem problema! Te enviaremos ' +
+    'notificação no whatsapp cadastrado assim que um atendente te responder.';
 
   const MSG_DELAY =
-  'Estamos com um volume de atendimentos acima do normal no momento, ' +
-  'mas sua solicitação já está na fila e será atendida em breve.\n\n' +
-  'Assim que um atendente assumir seu atendimento, você será notificado.';
+    'Estamos com um volume de atendimento acima do esperado, em breve ' +
+    'já iremos te atender. Fique tranquilo pois iremos te notificar.';
 
   // Envia qualquer auto-mensagem via RPC (SECURITY DEFINER — ignora RLS).
   // ID gerado antes do RPC para que o Realtime nunca chegue antes do registro.
+  // Quando chamado pelo agente, toca a conversa com supabaseSupport após o RPC
+  // para garantir que o Realtime entregue o evento ao cliente — o mesmo mecanismo
+  // usado por claimConversation/closeConversation, que funciona de forma confiável.
   const sendAutoMessage = useCallback(async (convId: string, text: string) => {
     const msgId = genId();
     autoMessageIdsRef.current.add(msgId);
@@ -244,12 +245,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       if (error) {
         autoMessageIdsRef.current.delete(msgId);
         console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
+        return;
+      }
+      // Toca a conversa com supabaseSupport para disparar o Realtime no cliente
+      if (isAgent) {
+        await supabaseSupport
+          .from('conversations')
+          .update({ last_agent_seen_at: new Date().toISOString() })
+          .eq('id', convId);
       }
     } catch (err) {
       autoMessageIdsRef.current.delete(msgId);
       console.error('[AutoMsg] Exceção ao enviar mensagem automática:', err);
     }
-  }, []);
+  }, [isAgent]);
 
   // Cancela o timer de 45s de uma conversa específica
   const clearAgentDelayTimer = useCallback((convId: string) => {
