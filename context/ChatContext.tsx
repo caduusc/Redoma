@@ -205,6 +205,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   // independente de timing de Realtime, optimistic inserts ou reconexões.
   const processedMsgIdsRef = useRef<Set<string>>(new Set());
 
+  // Substitui setMessages diretamente E sincroniza o processedMsgIdsRef.
+  // Deve ser usado sempre que fizermos um refresh completo de mensagens
+  // (boot, SUBSCRIBED, etc.) para que qualquer Realtime posterior com o
+  // mesmo ID seja corretamente bloqueado como duplicata.
+  const refreshMessages = useCallback((msgs: Message[]) => {
+    msgs.forEach((m) => processedMsgIdsRef.current.add(m.id));
+    setMessages(msgs);
+  }, []);
+
   // ─── Auto-mensagens de suporte ────────────────────────────────────────────────
   //
   // MSG 1 — saudação imediata, disparada no browser do CLIENTE na primeira mensagem.
@@ -501,7 +510,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (cancelled) return;
       if (msgErr) console.error('[support fetch messages]', msgErr);
-      setMessages((msgs || []) as Message[]);
+      refreshMessages((msgs || []) as Message[]);
 
       convChannel = supabaseSupport
         .channel('support_convs')
@@ -606,7 +615,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (cancelled) return;
       if (msgErr) console.error('[client fetch active messages]', msgErr);
-      setMessages((msgs || []) as Message[]);
+      refreshMessages((msgs || []) as Message[]);
 
       convChannel = supabasePublic
         .channel(`client_conversations_${activeConvId}`)
@@ -653,7 +662,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               .eq('conversation_id', activeConvId)
               .order('created_at', { ascending: true });
             if (!cancelled && freshMsgs && freshMsgs.length > 0) {
-              setMessages(freshMsgs as Message[]);
+              refreshMessages(freshMsgs as Message[]);
             }
           }
         });
