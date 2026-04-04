@@ -201,41 +201,61 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const notifiedMsgIds = useRef<Set<string>>(new Set());
 
-  // ─── MSG 1 — saudação imediata (lado cliente) ─────────────────────────────────
-  // autoGreetingSentRef: convIds onde a MSG 1 já foi enviada (evita duplicatas)
-  // autoMessageIdsRef:   IDs das auto-mensagens gerados aqui antes do RPC,
-  //                      para que o Realtime não confunda MSG 1 com resposta do agente.
+  // ─── Auto-mensagens de suporte ────────────────────────────────────────────────
   //
-  // MSG 2 — aviso de demora (server-side via pg_cron)
-  // Roda a cada minuto no Supabase, sem depender de nenhum browser.
-  // Controle feito pelas colunas last_client_message_at e auto_delay_msg_sent
-  // na tabela conversations, atualizadas por trigger no insert de messages.
+  // MSG 1 — saudação imediata, disparada no browser do CLIENTE na primeira mensagem.
+  //   autoGreetingSentRef: convIds onde a MSG 1 já foi enviada (evita duplicatas)
+  //   autoMessageIdsRef:   IDs gerados antes do RPC para que o Realtime não confunda
+  //                        MSG 1 com resposta real do agente no timer abaixo.
+  //
+  // MSG 2 — aviso de demora, disparada no browser do AGENTE após 45s sem resposta.
+  //   O timer roda no agente porque ele mantém o browser aberto durante o expediente,
+  //   evitando a limitação do iOS que mata JavaScript em abas em background.
+  //   agentDelayTimerRef:  mapa convId → timer de 45s
+  //   autoMsg2SentRef:     convIds onde a MSG 2 já foi enviada no período atual
+  //
   const autoGreetingSentRef = useRef<Set<string>>(new Set());
   const autoMessageIdsRef   = useRef<Set<string>>(new Set());
+  const agentDelayTimerRef  = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const autoMsg2SentRef     = useRef<Set<string>>(new Set());
 
   const MSG_GREETING =
-    'Olá! Já recebemos sua mensagem, um atendente já virá te atender. ' +
-    'Caso precise sair do aplicativo, não tem problema! Te enviaremos ' +
-    'notificação no whatsapp cadastrado assim que um atendente te responder.';
+  'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
+  'Em instantes um atendente irá te responder.\n\n' +
+  'Se precisar sair do aplicativo, fique tranquilo, ' +
+  'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
 
-  // Envia a MSG 1 via RPC (SECURITY DEFINER — ignora RLS).
-  // ID gerado antes do RPC para garantir que o Realtime nunca chegue antes do registro.
-  const sendAutoGreeting = useCallback(async (convId: string) => {
+  const MSG_DELAY =
+  'Estamos com um volume de atendimentos acima do normal no momento, ' +
+  'mas sua solicitação já está na fila e será atendida em breve.\n\n' +
+  'Assim que um atendente assumir seu atendimento, você será notificado.';
+
+  // Envia qualquer auto-mensagem via RPC (SECURITY DEFINER — ignora RLS).
+  // ID gerado antes do RPC para que o Realtime nunca chegue antes do registro.
+  const sendAutoMessage = useCallback(async (convId: string, text: string) => {
     const msgId = genId();
     autoMessageIdsRef.current.add(msgId);
     try {
       const { error } = await supabasePublic.rpc('send_auto_message', {
         p_id: msgId,
         p_conversation_id: convId,
-        p_text: MSG_GREETING,
+        p_text: text,
       });
       if (error) {
         autoMessageIdsRef.current.delete(msgId);
-        console.error('[AutoMsg] Erro ao enviar saudação automática:', error);
+        console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
       }
     } catch (err) {
       autoMessageIdsRef.current.delete(msgId);
-      console.error('[AutoMsg] Exceção ao enviar saudação automática:', err);
+      console.error('[AutoMsg] Exceção ao enviar mensagem automática:', err);
+    }
+  }, []);
+
+  // Cancela o timer de 45s de uma conversa específica
+  const clearAgentDelayTimer = useCallback((convId: string) => {
+    if (agentDelayTimerRef.current[convId]) {
+      clearTimeout(agentDelayTimerRef.current[convId]);
+      delete agentDelayTimerRef.current[convId];
     }
   }, []);
   // ─────────────────────────────────────────────────────────────────────────────
@@ -302,11 +322,30 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       return next;
     });
 
-    // Remove o ID do autoMessageIdsRef quando a MSG 1 volta via Realtime,
-    // evitando que o Set cresça indefinidamente.
-    if (msg.sender_type === 'agent' && autoMessageIdsRef.current.has(msg.id)) {
-      autoMessageIdsRef.current.delete(msg.id);
+    // ─── Lógica do timer de 45s (MSG 2) — roda no browser do AGENTE ──────────
+    if (msg.sender_type === 'agent') {
+      if (autoMessageIdsRef.current.has(msg.id)) {
+        // É uma auto-mensagem (MSG 1 ou MSG 2) voltando via Realtime — ignora
+        autoMessageIdsRef.current.delete(msg.id);
+      } else {
+        // É resposta real do agente — cancela o timer e libera MSG 2 p/ próxima inatividade
+        clearAgentDelayTimer(msg.conversation_id);
+        autoMsg2SentRef.current.delete(msg.conversation_id);
+      }
     }
+
+    if (msg.sender_type === 'client' && isAgent) {
+      // Nova mensagem do cliente vista pelo agente — reinicia o timer de 45s
+      clearAgentDelayTimer(msg.conversation_id);
+      agentDelayTimerRef.current[msg.conversation_id] = setTimeout(() => {
+        if (!autoMsg2SentRef.current.has(msg.conversation_id)) {
+          autoMsg2SentRef.current.add(msg.conversation_id);
+          sendAutoMessage(msg.conversation_id, MSG_DELAY);
+        }
+        delete agentDelayTimerRef.current[msg.conversation_id];
+      }, 45_000);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     if (
       isAgent &&
@@ -339,7 +378,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         body: preview,
       });
     }
-  }, [isAgent, notify, activeConvId]);
+  }, [isAgent, notify, activeConvId, clearAgentDelayTimer, sendAutoMessage]);
 
   const removeOptimisticMessage = useCallback((id: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -535,21 +574,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               if (!cancelled && enriched) {
                 upsertConversationRef.current(enriched);
               }
-
-              // Quando o pg_cron envia a MSG 2, ele atualiza auto_delay_msg_sent=true.
-              // O Realtime entrega o evento de conversa ao cliente, mas pode não
-              // entregar o INSERT da mensagem (RLS do role postgres vs anon).
-              // Re-buscamos as mensagens para garantir que a MSG 2 apareça sem refresh.
-              if (p.new.auto_delay_msg_sent === true) {
-                const { data: freshMsgs } = await supabasePublic
-                  .from('messages')
-                  .select('*')
-                  .eq('conversation_id', activeConvId)
-                  .order('created_at', { ascending: true });
-                if (!cancelled && freshMsgs && freshMsgs.length > 0) {
-                  setMessages(freshMsgs as Message[]);
-                }
-              }
             }
           }
         )
@@ -577,56 +601,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       void safeUnsub();
     };
   }, [isAgent, activeConvId]);
-
-  // ─── Polling independente para MSG 2 do pg_cron ───────────────────────────────
-  // useEffect separado do boot() para garantir que nunca seja cancelado junto
-  // com os channels do Realtime. Busca mensagens a cada 15s e quando o usuário
-  // retorna à aba (window focus ou visibilitychange).
-  useEffect(() => {
-    if (isAgent || !activeConvId) return;
-
-    let cancelled = false;
-
-    const refresh = async () => {
-      if (cancelled) return;
-      try { await ensureClientAuthReady(); } catch {}
-      const { data } = await supabasePublic
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', activeConvId)
-        .order('created_at', { ascending: true });
-      if (!cancelled && data && data.length > 0) {
-        setMessages(data as Message[]);
-      }
-    };
-
-    const interval = setInterval(refresh, 15_000);
-
-    // Quando o usuário retorna ao app/aba, aguarda 1s para a rede
-    // estabilizar (especialmente necessário no iOS) antes de buscar mensagens.
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') {
-        setTimeout(refresh, 1000);
-      }
-    };
-    const onPageShow = (e: PageTransitionEvent) => {
-      setTimeout(refresh, 1000);
-    };
-    const onFocus = () => setTimeout(refresh, 500);
-
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('pageshow', onPageShow);
-    window.addEventListener('focus', onFocus);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('pageshow', onPageShow);
-      window.removeEventListener('focus', onFocus);
-    };
-  }, [isAgent, activeConvId]);
-  // ─────────────────────────────────────────────────────────────────────────────
 
   const login = (email: string) => {
     const user: User = {
@@ -703,10 +677,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         !autoGreetingSentRef.current.has(conversationId)
       ) {
         autoGreetingSentRef.current.add(conversationId);
-        setTimeout(() => sendAutoGreeting(conversationId), 800);
+        setTimeout(() => sendAutoMessage(conversationId, MSG_GREETING), 800);
       }
     }
-    // MSG 2 é gerenciada pelo pg_cron no Supabase — sem lógica aqui.
     // ─────────────────────────────────────────────────────────────────────────
 
     const optimisticId = genId();
