@@ -202,26 +202,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const notifiedMsgIds = useRef<Set<string>>(new Set());
 
-  // Deduplicação global de mensagens — fora do batch do React para garantir
-  // que dois upsertMessage com o mesmo ID nunca resultem em duplicatas visuais,
-  // independente de timing de Realtime, optimistic inserts ou reconexões.
+  // Deduplicação global de mensagens
   const processedMsgIdsRef = useRef<Set<string>>(new Set());
 
-  // ─── Auto-mensagens de suporte ────────────────────────────────────────────────
-  //
-  // MSG 1 — saudação imediata, disparada no browser do CLIENTE na primeira mensagem.
-  //   autoGreetingSentRef: convIds onde a MSG 1 já foi enviada (evita duplicatas)
-  //   autoMessageIdsRef:   IDs gerados antes do insert/RPC para que o Realtime não
-  //                        confunda auto-mensagem com resposta real do agente.
-  //
-  // MSG 2 — aviso de demora, disparada no browser do AGENTE após 45s sem resposta.
-  //   O timer roda no agente porque ele mantém o browser aberto durante o expediente.
-  //   agentDelayTimerRef: mapa convId → timer de 45s
-  //
-  // IMPORTANTE:
-  //   A regra crítica da MSG 2 agora fica no banco, via RPC
-  //   send_delay_message_if_needed. Isso evita duplicação entre abas/agentes/reconnect.
-  //
+  // Auto mensagens
   const autoGreetingSentRef = useRef<Set<string>>(new Set());
   const autoMessageIdsRef = useRef<Set<string>>(new Set());
   const agentDelayTimerRef = useRef<
@@ -237,12 +221,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     'Estamos com um volume de atendimento acima do esperado, em breve ' +
     'já iremos te atender. Fique tranquilo pois iremos te notificar.';
 
-  // Envia auto-mensagem genérica.
-  //
-  // Agente: insere direto em messages.
-  // Cliente: usa RPC SECURITY DEFINER, pois cliente não pode inserir sender_type='agent'.
-  //
-  // Usa optimistic somente no agente para a MSG 1.
+  const upsertMessageRef = useRef<(msg: Message) => void>(() => {});
+  const upsertConversationRef = useRef<(conv: Conversation | any) => void>(
+    () => {}
+  );
+
   const sendAutoMessage = useCallback(
     async (convId: string, text: string) => {
       const msgId = genId();
@@ -292,28 +275,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     [isAgent]
   );
 
-  // MSG 2 blindada no banco.
-  // A função SQL decide atomicamente se deve inserir ou não.
-  const sendDelayMessageIfNeeded = useCallback(
-    async (convId: string) => {
-      try {
-        const { error } = await supabaseSupport.rpc(
-          'send_delay_message_if_needed',
-          {
-            p_conversation_id: convId,
-            p_text: MSG_DELAY,
-          }
-        );
-
-        if (error) {
-          console.error('[AutoMsg delay] erro ao enviar MSG 2:', error);
+  const sendDelayMessageIfNeeded = useCallback(async (convId: string) => {
+    try {
+      const { error } = await supabaseSupport.rpc(
+        'send_delay_message_if_needed',
+        {
+          p_conversation_id: convId,
+          p_text: MSG_DELAY,
         }
-      } catch (err) {
-        console.error('[AutoMsg delay] exceção:', err);
+      );
+
+      if (error) {
+        console.error('[AutoMsg delay] erro ao enviar MSG 2:', error);
       }
-    },
-    [MSG_DELAY]
-  );
+    } catch (err) {
+      console.error('[AutoMsg delay] exceção:', err);
+    }
+  }, []);
 
   const clearAgentDelayTimer = useCallback((convId: string) => {
     if (agentDelayTimerRef.current[convId]) {
@@ -365,8 +343,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const upsertMessage = useCallback(
     (msg: Message) => {
-      // Dedup síncrono via ref — impede que dois calls simultâneos passem pelo
-      // setMessages com o mesmo prev antes do React commitar o primeiro update.
       if (processedMsgIdsRef.current.has(msg.id)) return;
       processedMsgIdsRef.current.add(msg.id);
 
@@ -390,7 +366,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         return next;
       });
 
-      // ─── Lógica do timer de 45s (MSG 2) — roda no browser do AGENTE ──────────
       if (msg.sender_type === 'agent') {
         const isAutoMsg =
           (msg as any).is_auto === true || autoMessageIdsRef.current.has(msg.id);
@@ -398,7 +373,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         autoMessageIdsRef.current.delete(msg.id);
 
         if (!isAutoMsg) {
-          // Resposta real do agente cancela o timer pendente
           clearAgentDelayTimer(msg.conversation_id);
         }
       }
@@ -411,7 +385,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           delete agentDelayTimerRef.current[msg.conversation_id];
         }, 45_000);
       }
-      // ─────────────────────────────────────────────────────────────────────────
 
       if (
         isAgent &&
@@ -472,18 +445,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     setAgentToast(null);
   }, []);
 
-  // ─── Refs estáveis para callbacks ────────────────────────────────────────────
-  const upsertMessageRef = useRef(upsertMessage);
   useEffect(() => {
     upsertMessageRef.current = upsertMessage;
   }, [upsertMessage]);
 
-  const upsertConversationRef = useRef(upsertConversation);
   useEffect(() => {
     upsertConversationRef.current = upsertConversation;
   }, [upsertConversation]);
 
-  // ─── Efeito 1: AGENTE ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAgent) return;
 
@@ -531,8 +500,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       if (msgErr) console.error('[support fetch messages]', msgErr);
 
       setMessages((msgs || []) as Message[]);
-
-      // Reidrata IDs já carregados para a deduplicação continuar funcionando
       processedMsgIdsRef.current = new Set(
         ((msgs || []) as Message[]).map((m) => m.id)
       );
@@ -590,13 +557,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [isAgent]);
 
-  // ─── Efeito 2: CLIENTE ───────────────────────────────────────────────────────
   useEffect(() => {
     if (isAgent) return;
 
     let convChannel: any;
     let msgChannel: any;
     let cancelled = false;
+    let removeResumeListeners: (() => void) | null = null;
 
     const safeUnsub = async () => {
       try {
@@ -714,16 +681,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           (p: any) => p?.new && upsertMessageRef.current(p.new as Message)
         )
         .subscribe(async (status: string) => {
-          // Toda vez que o canal conecta/reconecta, busca mensagens frescas
-          // para recuperar qualquer mensagem enviada durante ausência/background.
           if (status === 'SUBSCRIBED' && !cancelled) {
             await fetchFreshMessages(activeConvId);
           }
         });
 
-      const handleVisibilityOrFocus = async () => {
-        if (cancelled) return;
-        if (document.visibilityState === 'hidden') return;
+      const handleResume = async () => {
+        if (cancelled || !activeConvId) return;
+
+        if (
+          typeof document !== 'undefined' &&
+          document.visibilityState === 'hidden'
+        ) {
+          return;
+        }
 
         try {
           await ensureClientAuthReady();
@@ -733,29 +704,24 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       };
 
-      window.addEventListener('focus', handleVisibilityOrFocus);
-      window.addEventListener('online', handleVisibilityOrFocus);
-      document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.addEventListener('focus', handleResume);
+      window.addEventListener('pageshow', handleResume);
+      window.addEventListener('online', handleResume);
+      document.addEventListener('visibilitychange', handleResume);
 
-      return () => {
-        window.removeEventListener('focus', handleVisibilityOrFocus);
-        window.removeEventListener('online', handleVisibilityOrFocus);
-        document.removeEventListener(
-          'visibilitychange',
-          handleVisibilityOrFocus
-        );
+      removeResumeListeners = () => {
+        window.removeEventListener('focus', handleResume);
+        window.removeEventListener('pageshow', handleResume);
+        window.removeEventListener('online', handleResume);
+        document.removeEventListener('visibilitychange', handleResume);
       };
     };
 
-    let cleanupVisibility: (() => void) | void;
-
-    boot().then((cleanup) => {
-      cleanupVisibility = cleanup;
-    });
+    boot();
 
     return () => {
       cancelled = true;
-      if (cleanupVisibility) cleanupVisibility();
+      removeResumeListeners?.();
       void safeUnsub();
     };
   }, [isAgent, activeConvId]);
@@ -824,7 +790,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     if (senderType !== 'agent') await ensureClientAuthReady();
 
-    // ─── MSG 1: saudação imediata na primeira mensagem do cliente ─────────────
     if (senderType === 'client') {
       const existingClientMsgs = messages.filter(
         (m) => m.conversation_id === conversationId && m.sender_type === 'client'
@@ -838,7 +803,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         setTimeout(() => sendAutoMessage(conversationId, MSG_GREETING), 800);
       }
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     const optimisticId = genId();
 
@@ -952,7 +916,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const getConversation = (id: string) => conversations.find((c) => c.id === id);
+  const getConversation = (id: string) =>
+    conversations.find((c) => c.id === id);
 
   const getMessages = (conversationId: string) =>
     messages.filter((m) => m.conversation_id === conversationId);
