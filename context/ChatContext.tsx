@@ -214,10 +214,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const autoMessageIdsRef   = useRef<Set<string>>(new Set());
 
   const MSG_GREETING =
-  'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
-  'Em instantes um atendente irá te responder.\n\n' +
-  'Se precisar sair do aplicativo, fique tranquilo, ' +
-  'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
+    'Olá! Já recebemos sua mensagem, um atendente já virá te atender. ' +
+    'Caso precise sair do aplicativo, não tem problema! Te enviaremos ' +
+    'notificação no whatsapp cadastrado assim que um atendente te responder.';
 
   // Envia a MSG 1 via RPC (SECURITY DEFINER — ignora RLS).
   // ID gerado antes do RPC para garantir que o Realtime nunca chegue antes do registro.
@@ -601,19 +600,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     };
 
-    const interval = setInterval(refresh, 1_000);
+    const interval = setInterval(refresh, 15_000);
 
-    // visibilitychange: troca de aba no desktop
-    // pageshow: retorno de app/aba no mobile (inclui bfcache do iOS/Android)
-    // focus: fallback para desktop
+    // Quando o usuário retorna ao app/aba, aguarda 1s para a rede
+    // estabilizar (especialmente necessário no iOS) antes de buscar mensagens.
     const onVisible = () => {
-      if (document.visibilityState === 'visible') refresh();
+      if (document.visibilityState === 'visible') {
+        setTimeout(refresh, 1000);
+      }
     };
     const onPageShow = (e: PageTransitionEvent) => {
-      // e.persisted = true significa que veio do bfcache (mobile)
-      if (e.persisted || document.visibilityState === 'visible') refresh();
+      setTimeout(refresh, 1000);
     };
-    const onFocus = () => refresh();
+    const onFocus = () => setTimeout(refresh, 500);
 
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('pageshow', onPageShow);
