@@ -587,7 +587,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       if (!cancelled && freshMsgs) {
         (freshMsgs as Message[]).forEach((m) => upsertMessageRef.current(m));
       }
-    }, 30_000);
+    }, 5_000);
 
     return () => {
       cancelled = true;
