@@ -216,7 +216,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const MSG_GREETING =
   'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
   'Em instantes um atendente irá te responder.\n\n' +
-  'Se precisar sair do aplicativo, fique tranquilo — ' +
+  'Se precisar sair do aplicativo, fique tranquilo, ' +
   'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
 
   // Envia a MSG 1 via RPC (SECURITY DEFINER — ignora RLS).
