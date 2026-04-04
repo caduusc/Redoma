@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ChatLayout from '../components/ChatLayout';
 import MessageList from '../components/MessageList';
@@ -21,11 +21,38 @@ const ClientChat: React.FC = () => {
   const [communityName, setCommunityName] = useState<string | null>(null);
   const [loadingTitle, setLoadingTitle] = useState<boolean>(true);
 
+  // usado apenas para forçar re-render após recovery fetch
+  const [refreshTick, setRefreshTick] = useState(0);
+
   const activeConvId = localStorage.getItem('redoma_active_conv');
   const conversation = activeConvId ? getConversation(activeConvId) : undefined;
   const messages = activeConvId ? getMessages(activeConvId) : [];
 
   const [seenAt, setSeenAt] = useState<number>(Date.now());
+
+  const reloadConversationMessages = useCallback(async () => {
+    if (!activeConvId) return;
+
+    try {
+      const { error } = await supabasePublic
+        .from('messages')
+        .select('id')
+        .eq('conversation_id', activeConvId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('[ClientChat] reload messages error', error);
+        return;
+      }
+
+      // força o componente a reler os dados do contexto após o ChatContext já ter
+      // feito seus próprios fetches/reconnects. Em mobile isso ajuda quando a tela
+      // volta "congelada".
+      setRefreshTick((v) => v + 1);
+    } catch (err) {
+      console.error('[ClientChat] reload messages exception', err);
+    }
+  }, [activeConvId]);
 
   useEffect(() => {
     if (!conversation?.id) return;
@@ -40,7 +67,7 @@ const ClientChat: React.FC = () => {
     };
 
     markSeen();
-  }, [conversation?.id]);
+  }, [conversation?.id, refreshTick]);
 
   const hasUnreadFromAgent = useMemo(() => {
     if (!messages.length) return false;
@@ -52,8 +79,12 @@ const ClientChat: React.FC = () => {
   }, [messages, seenAt]);
 
   const communityIdForTitle = useMemo(() => {
-    return conversation?.community_id || localStorage.getItem('redoma_client_cid') || null;
-  }, [conversation?.community_id]);
+    return (
+      conversation?.community_id ||
+      localStorage.getItem('redoma_client_cid') ||
+      null
+    );
+  }, [conversation?.community_id, refreshTick]);
 
   useEffect(() => {
     const cid = communityIdForTitle;
@@ -96,6 +127,38 @@ const ClientChat: React.FC = () => {
     if (activeConvId) return;
     navigate('/client/start');
   }, [activeConvId, navigate]);
+
+  // Recovery extra da própria tela:
+  // quando a página volta ao foco/foreground, força releitura.
+  useEffect(() => {
+    if (!activeConvId) return;
+
+    const handleResume = async () => {
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'hidden'
+      ) {
+        return;
+      }
+
+      await reloadConversationMessages();
+    };
+
+    // roda ao abrir a tela
+    void reloadConversationMessages();
+
+    window.addEventListener('focus', handleResume);
+    window.addEventListener('pageshow', handleResume);
+    window.addEventListener('online', handleResume);
+    document.addEventListener('visibilitychange', handleResume);
+
+    return () => {
+      window.removeEventListener('focus', handleResume);
+      window.removeEventListener('pageshow', handleResume);
+      window.removeEventListener('online', handleResume);
+      document.removeEventListener('visibilitychange', handleResume);
+    };
+  }, [activeConvId, reloadConversationMessages]);
 
   const titleLabel = useMemo(() => {
     if (communityName) return communityName;
@@ -151,7 +214,11 @@ const ClientChat: React.FC = () => {
         </div>
 
         <div className="flex-1 min-h-0">
-          <MessageList messages={messages} currentType="client" conversation={conversation} />
+          <MessageList
+            messages={messages}
+            currentType="client"
+            conversation={conversation}
+          />
         </div>
 
         <div className="shrink-0 border-t border-slate-100 bg-white">
