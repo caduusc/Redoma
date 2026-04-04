@@ -257,13 +257,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     try {
       if (isAgent) {
+        // Optimistic — aparece imediatamente no agente e via Realtime no cliente.
+        // processedMsgIdsRef bloqueia o evento Realtime no AGENTE (evita duplicata),
+        // mas o CLIENTE recebe o evento via client_messages channel normalmente.
+        upsertMessageRef.current(payload as any);
+
         const { error } = await supabaseSupport
           .from('messages')
           .insert(payload);
 
         if (error) {
-          autoMessageIdsRef.current.delete(msgId);
+          // Reverte o optimistic em caso de erro
+          setMessages((prev) => prev.filter((m) => m.id !== msgId));
           processedMsgIdsRef.current.delete(msgId);
+          autoMessageIdsRef.current.delete(msgId);
           console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
           return;
         }
