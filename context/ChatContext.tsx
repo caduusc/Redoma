@@ -590,6 +590,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const refresh = async () => {
       if (cancelled) return;
+      try { await ensureClientAuthReady(); } catch {}
       const { data } = await supabasePublic
         .from('messages')
         .select('*')
@@ -602,18 +603,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const interval = setInterval(refresh, 15_000);
 
+    // visibilitychange: troca de aba no desktop
+    // pageshow: retorno de app/aba no mobile (inclui bfcache do iOS/Android)
+    // focus: fallback para desktop
     const onVisible = () => {
       if (document.visibilityState === 'visible') refresh();
+    };
+    const onPageShow = (e: PageTransitionEvent) => {
+      // e.persisted = true significa que veio do bfcache (mobile)
+      if (e.persisted || document.visibilityState === 'visible') refresh();
     };
     const onFocus = () => refresh();
 
     document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pageshow', onPageShow);
     window.addEventListener('focus', onFocus);
 
     return () => {
       cancelled = true;
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pageshow', onPageShow);
       window.removeEventListener('focus', onFocus);
     };
   }, [isAgent, activeConvId]);
