@@ -216,7 +216,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const MSG_GREETING =
   'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
   'Em instantes um atendente irá te responder.\n\n' +
-  'Se precisar sair do aplicativo, fique tranquilo — ' +
+  'Se precisar sair do aplicativo, fique tranquilo, ' +
   'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
 
   // Envia a MSG 1 via RPC (SECURITY DEFINER — ignora RLS).
@@ -549,8 +549,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
                   .select('*')
                   .eq('conversation_id', activeConvId)
                   .order('created_at', { ascending: true });
-                if (!cancelled && freshMsgs) {
-                  (freshMsgs as Message[]).forEach((m) => upsertMessageRef.current(m));
+                if (!cancelled && freshMsgs && freshMsgs.length > 0) {
+                  setMessages(freshMsgs as Message[]);
                 }
               }
             }
@@ -575,13 +575,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const fetchFreshMessages = async () => {
       if (cancelled || !activeConvId) return;
+      try { await ensureClientAuthReady(); } catch {}
       const { data: freshMsgs } = await supabasePublic
         .from('messages')
         .select('*')
         .eq('conversation_id', activeConvId)
         .order('created_at', { ascending: true });
-      if (!cancelled && freshMsgs) {
-        (freshMsgs as Message[]).forEach((m) => upsertMessageRef.current(m));
+      // Usa setMessages diretamente (igual ao boot) em vez de upsertMessage,
+      // evitando que a deduplicação por ID descarte a MSG 2 silenciosamente.
+      if (!cancelled && freshMsgs && freshMsgs.length > 0) {
+        setMessages(freshMsgs as Message[]);
       }
     };
 
