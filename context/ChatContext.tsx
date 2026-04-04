@@ -464,8 +464,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     let convChannel: any;
     let msgChannel: any;
     let cancelled = false;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
 
     const safeUnsub = async () => {
+      if (pollInterval) clearInterval(pollInterval);
       try {
         if (convChannel) {
           await convChannel.unsubscribe?.();
@@ -572,6 +574,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     boot();
+
+    // Polling a cada 30s como fallback para mensagens do pg_cron que o Realtime
+    // pode não entregar ao cliente (limitação de RLS com role postgres).
+    pollInterval = setInterval(async () => {
+      if (cancelled || !activeConvId) return;
+      const { data: freshMsgs } = await supabasePublic
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', activeConvId)
+        .order('created_at', { ascending: true });
+      if (!cancelled && freshMsgs) {
+        (freshMsgs as Message[]).forEach((m) => upsertMessageRef.current(m));
+      }
+    }, 30_000);
 
     return () => {
       cancelled = true;
