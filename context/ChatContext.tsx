@@ -200,6 +200,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   } = useAgentNotifications();
 
   const notifiedMsgIds = useRef<Set<string>>(new Set());
+  // Deduplicação global de mensagens — fora do batch do React para garantir
+  // que dois upsertMessage com o mesmo ID nunca resultem em duplicatas visuais,
+  // independente de timing de Realtime, optimistic inserts ou reconexões.
+  const processedMsgIdsRef = useRef<Set<string>>(new Set());
 
   // ─── Auto-mensagens de suporte ────────────────────────────────────────────────
   //
@@ -253,23 +257,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     try {
       if (isAgent) {
-        // Optimistic — Realtime com mesmo ID será deduplicado
-        upsertMessageRef.current(payload as any);
-
-        const { data, error } = await supabaseSupport
+        const { error } = await supabaseSupport
           .from('messages')
-          .insert(payload)
-          .select('*')
-          .single();
+          .insert(payload);
 
         if (error) {
-          // Reverte o optimista em caso de erro
-          setMessages((prev) => prev.filter((m) => m.id !== msgId));
           autoMessageIdsRef.current.delete(msgId);
+          processedMsgIdsRef.current.delete(msgId);
           console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
           return;
         }
-        if (data) upsertMessageRef.current(data as Message);
       } else {
         const { error } = await supabasePublic.rpc('send_auto_message', {
           p_id: msgId,
@@ -282,8 +279,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     } catch (err) {
-      setMessages((prev) => prev.filter((m) => m.id !== msgId));
       autoMessageIdsRef.current.delete(msgId);
+      processedMsgIdsRef.current.delete(msgId);
       console.error('[AutoMsg] Exceção ao enviar mensagem automática:', err);
     }
   }, [isAgent]);
@@ -339,6 +336,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const upsertMessage = useCallback((msg: Message) => {
+    // Dedup síncrono via ref — impede que dois calls simultâneos passem pelo
+    // setMessages com o mesmo prev antes do React commitar o primeiro update.
+    if (processedMsgIdsRef.current.has(msg.id)) return;
+    processedMsgIdsRef.current.add(msg.id);
+
     setMessages((prev) => {
       if (prev.some((m) => m.id === msg.id)) return prev;
 
