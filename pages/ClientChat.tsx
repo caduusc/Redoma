@@ -16,13 +16,11 @@ const ClientChat: React.FC = () => {
     addMessage,
     sendImageMessage,
     setActiveConversationId,
+    refreshActiveConversation,
   } = useChat();
 
   const [communityName, setCommunityName] = useState<string | null>(null);
   const [loadingTitle, setLoadingTitle] = useState<boolean>(true);
-
-  // usado apenas para forçar re-render após recovery fetch
-  const [refreshTick, setRefreshTick] = useState(0);
 
   const activeConvId = localStorage.getItem('redoma_active_conv');
   const conversation = activeConvId ? getConversation(activeConvId) : undefined;
@@ -30,44 +28,21 @@ const ClientChat: React.FC = () => {
 
   const [seenAt, setSeenAt] = useState<number>(Date.now());
 
-  const reloadConversationMessages = useCallback(async () => {
-    if (!activeConvId) return;
-
-    try {
-      const { error } = await supabasePublic
-        .from('messages')
-        .select('id')
-        .eq('conversation_id', activeConvId)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.error('[ClientChat] reload messages error', error);
-        return;
-      }
-
-      // força o componente a reler os dados do contexto após o ChatContext já ter
-      // feito seus próprios fetches/reconnects. Em mobile isso ajuda quando a tela
-      // volta "congelada".
-      setRefreshTick((v) => v + 1);
-    } catch (err) {
-      console.error('[ClientChat] reload messages exception', err);
-    }
-  }, [activeConvId]);
-
-  useEffect(() => {
+  const markSeen = useCallback(async () => {
     if (!conversation?.id) return;
 
-    const markSeen = async () => {
-      const now = new Date().toISOString();
-      await supabasePublic
-        .from('conversations')
-        .update({ last_client_seen_at: now })
-        .eq('id', conversation.id);
-      setSeenAt(Date.now());
-    };
+    const now = new Date().toISOString();
+    await supabasePublic
+      .from('conversations')
+      .update({ last_client_seen_at: now })
+      .eq('id', conversation.id);
 
-    markSeen();
-  }, [conversation?.id, refreshTick]);
+    setSeenAt(Date.now());
+  }, [conversation?.id]);
+
+  useEffect(() => {
+    void markSeen();
+  }, [markSeen]);
 
   const hasUnreadFromAgent = useMemo(() => {
     if (!messages.length) return false;
@@ -84,7 +59,7 @@ const ClientChat: React.FC = () => {
       localStorage.getItem('redoma_client_cid') ||
       null
     );
-  }, [conversation?.community_id, refreshTick]);
+  }, [conversation?.community_id]);
 
   useEffect(() => {
     const cid = communityIdForTitle;
@@ -128,8 +103,6 @@ const ClientChat: React.FC = () => {
     navigate('/client/start');
   }, [activeConvId, navigate]);
 
-  // Recovery extra da própria tela:
-  // quando a página volta ao foco/foreground, força releitura.
   useEffect(() => {
     if (!activeConvId) return;
 
@@ -141,11 +114,16 @@ const ClientChat: React.FC = () => {
         return;
       }
 
-      await reloadConversationMessages();
+      try {
+        await refreshActiveConversation();
+        await markSeen();
+      } catch (err) {
+        console.error('[ClientChat] resume refresh failed', err);
+      }
     };
 
-    // roda ao abrir a tela
-    void reloadConversationMessages();
+    // carrega ao entrar na tela
+    void handleResume();
 
     window.addEventListener('focus', handleResume);
     window.addEventListener('pageshow', handleResume);
@@ -158,7 +136,7 @@ const ClientChat: React.FC = () => {
       window.removeEventListener('online', handleResume);
       document.removeEventListener('visibilitychange', handleResume);
     };
-  }, [activeConvId, reloadConversationMessages]);
+  }, [activeConvId, refreshActiveConversation, markSeen]);
 
   const titleLabel = useMemo(() => {
     if (communityName) return communityName;
@@ -170,11 +148,13 @@ const ClientChat: React.FC = () => {
   const handleSend = async (text: string) => {
     if (!conversation?.id) return;
     await addMessage(conversation.id, text, 'client');
+    await markSeen();
   };
 
   const handleSendImage = async (file: File) => {
     if (!conversation?.id) return;
     await sendImageMessage(conversation.id, file, 'client');
+    await markSeen();
   };
 
   const handleBack = () => {

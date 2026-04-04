@@ -56,6 +56,7 @@ interface ChatContextType {
   getMessages: (conversationId: string) => Message[];
 
   setActiveConversationId: (id: string | null) => void;
+  refreshActiveConversation: () => Promise<void>;
 
   notificationPermission: 'default' | 'granted' | 'denied' | 'unsupported';
   notificationsEnabled: boolean;
@@ -201,11 +202,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   } = useAgentNotifications();
 
   const notifiedMsgIds = useRef<Set<string>>(new Set());
-
-  // Deduplicação global de mensagens
   const processedMsgIdsRef = useRef<Set<string>>(new Set());
 
-  // Auto mensagens
   const autoGreetingSentRef = useRef<Set<string>>(new Set());
   const autoMessageIdsRef = useRef<Set<string>>(new Set());
   const agentDelayTimerRef = useRef<
@@ -213,18 +211,108 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   >({});
 
   const MSG_GREETING =
-    'Olá! Já recebemos sua mensagem, um atendente já virá te atender. ' +
-    'Caso precise sair do aplicativo, não tem problema! Te enviaremos ' +
-    'notificação no whatsapp cadastrado assim que um atendente te responder.';
+  'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
+  'Em instantes um atendente irá te responder.\n\n' +
+  'Se precisar sair do aplicativo, fique tranquilo, ' +
+  'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
 
   const MSG_DELAY =
-    'Estamos com um volume de atendimento acima do esperado, em breve ' +
-    'já iremos te atender. Fique tranquilo pois iremos te notificar.';
+  'Estamos com um volume de atendimentos acima do normal no momento, ' +
+  'mas sua solicitação já está na fila e será atendida em breve.\n\n' +
+  'Assim que um atendente assumir seu atendimento, você será notificado.';
 
   const upsertMessageRef = useRef<(msg: Message) => void>(() => {});
   const upsertConversationRef = useRef<(conv: Conversation | any) => void>(
     () => {}
   );
+
+  const upsertConversation = useCallback((conv: Conversation | any) => {
+    const normalizedConv = normalizeConversation(conv);
+
+    setConversations((prev) => {
+      const existing = prev.find((c) => c.id === normalizedConv.id) as any;
+
+      if (!existing) {
+        return [...prev, normalizedConv];
+      }
+
+      const merged = {
+        ...existing,
+        ...normalizedConv,
+        member_name:
+          normalizedConv.member_name ??
+          existing.member_name ??
+          existing.memberName ??
+          null,
+        community_name:
+          normalizedConv.community_name ??
+          existing.community_name ??
+          existing.communityName ??
+          null,
+        communityId:
+          normalizedConv.communityId ??
+          normalizedConv.community_id ??
+          existing.communityId ??
+          existing.community_id ??
+          null,
+        community_id:
+          normalizedConv.community_id ??
+          normalizedConv.communityId ??
+          existing.community_id ??
+          existing.communityId ??
+          null,
+      };
+
+      return prev.map((c) => (c.id === normalizedConv.id ? merged : c));
+    });
+  }, []);
+
+  const refreshActiveConversation = useCallback(async () => {
+    if (isAgent) return;
+    if (!activeConvId) {
+      setConversations([]);
+      setMessages([]);
+      processedMsgIdsRef.current.clear();
+      return;
+    }
+
+    try {
+      await ensureClientAuthReady();
+
+      const { data: conv, error: convErr } = await supabasePublic
+        .from('conversations')
+        .select('*')
+        .eq('id', activeConvId)
+        .maybeSingle();
+
+      if (convErr) {
+        console.error('[refreshActiveConversation] conversation error', convErr);
+      } else {
+        const enrichedClientConvs = conv
+          ? await enrichConversations(supabasePublic, [conv])
+          : [];
+        setConversations(enrichedClientConvs as Conversation[]);
+      }
+
+      const { data: freshMsgs, error: msgErr } = await supabasePublic
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', activeConvId)
+        .order('created_at', { ascending: true });
+
+      if (msgErr) {
+        console.error('[refreshActiveConversation] messages error', msgErr);
+        return;
+      }
+
+      setMessages((freshMsgs || []) as Message[]);
+      processedMsgIdsRef.current = new Set(
+        ((freshMsgs || []) as Message[]).map((m) => m.id)
+      );
+    } catch (e) {
+      console.error('[refreshActiveConversation] failed', e);
+    }
+  }, [activeConvId, isAgent]);
 
   const sendAutoMessage = useCallback(
     async (convId: string, text: string) => {
@@ -298,47 +386,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       clearTimeout(agentDelayTimerRef.current[convId]);
       delete agentDelayTimerRef.current[convId];
     }
-  }, []);
-
-  const upsertConversation = useCallback((conv: Conversation | any) => {
-    const normalizedConv = normalizeConversation(conv);
-
-    setConversations((prev) => {
-      const existing = prev.find((c) => c.id === normalizedConv.id) as any;
-
-      if (!existing) {
-        return [...prev, normalizedConv];
-      }
-
-      const merged = {
-        ...existing,
-        ...normalizedConv,
-        member_name:
-          normalizedConv.member_name ??
-          existing.member_name ??
-          existing.memberName ??
-          null,
-        community_name:
-          normalizedConv.community_name ??
-          existing.community_name ??
-          existing.communityName ??
-          null,
-        communityId:
-          normalizedConv.communityId ??
-          normalizedConv.community_id ??
-          existing.communityId ??
-          existing.community_id ??
-          null,
-        community_id:
-          normalizedConv.community_id ??
-          normalizedConv.communityId ??
-          existing.community_id ??
-          existing.communityId ??
-          null,
-      };
-
-      return prev.map((c) => (c.id === normalizedConv.id ? merged : c));
-    });
   }, []);
 
   const upsertMessage = useCallback(
@@ -580,70 +627,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       } catch {}
     };
 
-    const fetchFreshMessages = async (conversationId: string) => {
-      const { data: freshMsgs, error } = await supabasePublic
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.error('[client fetch fresh messages]', error);
-        return;
-      }
-
-      if (!cancelled && freshMsgs) {
-        setMessages(freshMsgs as Message[]);
-        processedMsgIdsRef.current = new Set(
-          ((freshMsgs || []) as Message[]).map((m) => m.id)
-        );
-      }
-    };
-
     const boot = async () => {
-      try {
-        await ensureClientAuthReady();
-      } catch (e) {
-        console.error('[client auth] failed', e);
-        return;
-      }
+      await refreshActiveConversation();
 
-      if (!activeConvId) {
-        setConversations([]);
-        setMessages([]);
-        processedMsgIdsRef.current.clear();
-        return;
-      }
-
-      const { data: conv, error: convErr } = await supabasePublic
-        .from('conversations')
-        .select('*')
-        .eq('id', activeConvId)
-        .maybeSingle();
-
-      if (cancelled) return;
-      if (convErr) console.error('[client fetch active conversation]', convErr);
-
-      const enrichedClientConvs = conv
-        ? await enrichConversations(supabasePublic, [conv])
-        : [];
-
-      if (cancelled) return;
-      setConversations(enrichedClientConvs as Conversation[]);
-
-      const { data: msgs, error: msgErr } = await supabasePublic
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', activeConvId)
-        .order('created_at', { ascending: true });
-
-      if (cancelled) return;
-      if (msgErr) console.error('[client fetch active messages]', msgErr);
-
-      setMessages((msgs || []) as Message[]);
-      processedMsgIdsRef.current = new Set(
-        ((msgs || []) as Message[]).map((m) => m.id)
-      );
+      if (cancelled || !activeConvId) return;
 
       convChannel = supabasePublic
         .channel(`client_conversations_${activeConvId}`)
@@ -682,7 +669,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         )
         .subscribe(async (status: string) => {
           if (status === 'SUBSCRIBED' && !cancelled) {
-            await fetchFreshMessages(activeConvId);
+            await refreshActiveConversation();
           }
         });
 
@@ -696,12 +683,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           return;
         }
 
-        try {
-          await ensureClientAuthReady();
-          await fetchFreshMessages(activeConvId);
-        } catch (e) {
-          console.error('[client resume sync] failed', e);
-        }
+        await refreshActiveConversation();
       };
 
       window.addEventListener('focus', handleResume);
@@ -724,7 +706,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       removeResumeListeners?.();
       void safeUnsub();
     };
-  }, [isAgent, activeConvId]);
+  }, [isAgent, activeConvId, refreshActiveConversation]);
 
   const login = (email: string) => {
     const user: User = {
@@ -940,6 +922,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         getConversation,
         getMessages,
         setActiveConversationId,
+        refreshActiveConversation,
         notificationPermission,
         notificationsEnabled,
         notificationsSupported,
