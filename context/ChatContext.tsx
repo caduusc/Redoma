@@ -216,7 +216,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const MSG_GREETING =
   'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
   'Em instantes um atendente irá te responder.\n\n' +
-  'Se precisar sair do aplicativo, fique tranquilo, ' +
+  'Se precisar sair do aplicativo, fique tranquilo — ' +
   'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
 
   // Envia a MSG 1 via RPC (SECURITY DEFINER — ignora RLS).
@@ -464,10 +464,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     let convChannel: any;
     let msgChannel: any;
     let cancelled = false;
-    let pollInterval: ReturnType<typeof setInterval> | null = null;
 
     const safeUnsub = async () => {
-      if (pollInterval) clearInterval(pollInterval);
       try {
         if (convChannel) {
           await convChannel.unsubscribe?.();
@@ -573,43 +571,53 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         .subscribe();
     };
 
-    const fetchFreshMessages = async () => {
-      if (cancelled || !activeConvId) return;
-      try { await ensureClientAuthReady(); } catch {}
-      const { data: freshMsgs } = await supabasePublic
+    boot();
+
+    return () => {
+      cancelled = true;
+      void safeUnsub();
+    };
+  }, [isAgent, activeConvId]);
+
+  // ─── Polling independente para MSG 2 do pg_cron ───────────────────────────────
+  // useEffect separado do boot() para garantir que nunca seja cancelado junto
+  // com os channels do Realtime. Busca mensagens a cada 15s e quando o usuário
+  // retorna à aba (window focus ou visibilitychange).
+  useEffect(() => {
+    if (isAgent || !activeConvId) return;
+
+    let cancelled = false;
+
+    const refresh = async () => {
+      if (cancelled) return;
+      const { data } = await supabasePublic
         .from('messages')
         .select('*')
         .eq('conversation_id', activeConvId)
         .order('created_at', { ascending: true });
-      // Usa setMessages diretamente (igual ao boot) em vez de upsertMessage,
-      // evitando que a deduplicação por ID descarte a MSG 2 silenciosamente.
-      if (!cancelled && freshMsgs && freshMsgs.length > 0) {
-        setMessages(freshMsgs as Message[]);
+      if (!cancelled && data && data.length > 0) {
+        setMessages(data as Message[]);
       }
     };
 
-    boot();
+    const interval = setInterval(refresh, 15_000);
 
-    // Polling a cada 30s como fallback para mensagens do pg_cron que o Realtime
-    // pode não entregar ao cliente (limitação de RLS com role postgres).
-    pollInterval = setInterval(fetchFreshMessages, 30_000);
-
-    // Page Visibility API: quando o usuário retorna à aba (vinda de outra aba,
-    // minimização ou fechamento/reabertura), busca mensagens imediatamente sem
-    // esperar o próximo ciclo do polling.
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        fetchFreshMessages();
-      }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const onFocus = () => refresh();
+
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
 
     return () => {
       cancelled = true;
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      void safeUnsub();
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
     };
   }, [isAgent, activeConvId]);
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const login = (email: string) => {
     const user: User = {
