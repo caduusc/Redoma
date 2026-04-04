@@ -228,43 +228,63 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     'Estamos com um volume de atendimento acima do esperado, em breve ' +
     'já iremos te atender. Fique tranquilo pois iremos te notificar.';
 
-  // Envia qualquer auto-mensagem.
-  // ID gerado antes do insert para que o Realtime nunca chegue antes do registro.
+  // Envia qualquer auto-mensagem seguindo o mesmo padrão do addMessage:
+  // optimistic → insert com .select() → upsert do dado confirmado.
+  // O Realtime que chegar com o mesmo ID é deduplicado automaticamente.
   //
-  // Agente: insere direto via supabaseSupport (authenticated) — mesmo canal das
-  // mensagens normais do agente. Isso garante que o Realtime entregue ao cliente
-  // exatamente igual a qualquer outra mensagem do atendente.
+  // Agente: supabaseSupport (authenticated) → Realtime entrega ao cliente
+  //         igual a qualquer mensagem normal do atendente.
+  // Cliente: RPC SECURITY DEFINER → cliente não pode inserir sender_type='agent'.
   //
-  // Cliente: usa RPC com SECURITY DEFINER porque o cliente não tem permissão de
-  // inserir mensagens com sender_type='agent' diretamente.
+  // Usa upsertMessageRef para evitar dependência circular com upsertMessage.
   const sendAutoMessage = useCallback(async (convId: string, text: string) => {
     const msgId = genId();
     autoMessageIdsRef.current.add(msgId);
+
+    const payload = {
+      id: msgId,
+      conversation_id: convId,
+      sender_type: 'agent' as const,
+      message_type: 'text' as const,
+      text,
+      is_auto: true,
+      created_at: new Date().toISOString(),
+    };
+
     try {
       if (isAgent) {
-        const { error } = await supabaseSupport
+        // Optimistic — Realtime com mesmo ID será deduplicado
+        upsertMessageRef.current(payload as any);
+
+        const { data, error } = await supabaseSupport
           .from('messages')
-          .insert({
-            id: msgId,
-            conversation_id: convId,
-            sender_type: 'agent',
-            message_type: 'text',
-            text,
-            is_auto: true,
-            created_at: new Date().toISOString(),
-          });
-        if (error) throw error;
+          .insert(payload)
+          .select('*')
+          .single();
+
+        if (error) {
+          // Reverte o optimista em caso de erro
+          setMessages((prev) => prev.filter((m) => m.id !== msgId));
+          autoMessageIdsRef.current.delete(msgId);
+          console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
+          return;
+        }
+        if (data) upsertMessageRef.current(data as Message);
       } else {
         const { error } = await supabasePublic.rpc('send_auto_message', {
           p_id: msgId,
           p_conversation_id: convId,
           p_text: text,
         });
-        if (error) throw error;
+        if (error) {
+          autoMessageIdsRef.current.delete(msgId);
+          console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
+        }
       }
     } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.id !== msgId));
       autoMessageIdsRef.current.delete(msgId);
-      console.error('[AutoMsg] Erro ao enviar mensagem automática:', err);
+      console.error('[AutoMsg] Exceção ao enviar mensagem automática:', err);
     }
   }, [isAgent]);
 
@@ -614,7 +634,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           },
           (p: any) => p?.new && upsertMessageRef.current(p.new as Message)
         )
-        .subscribe();
+        .subscribe(async (status: string) => {
+          // Toda vez que o canal reconecta (inclusive após suspensão mobile),
+          // busca mensagens frescas para não perder nenhuma enviada durante a ausência.
+          if (status === 'SUBSCRIBED' && !cancelled) {
+            const { data: freshMsgs } = await supabasePublic
+              .from('messages')
+              .select('*')
+              .eq('conversation_id', activeConvId)
+              .order('created_at', { ascending: true });
+            if (!cancelled && freshMsgs && freshMsgs.length > 0) {
+              setMessages(freshMsgs as Message[]);
+            }
+          }
+        });
     };
 
     boot();
