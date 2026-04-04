@@ -578,6 +578,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               if (!cancelled && enriched) {
                 upsertConversationRef.current(enriched);
               }
+
+              // Re-busca mensagens em qualquer update de conversa para garantir
+              // que MSG 2 (enviada pelo agente via RPC) apareça sem refresh.
+              // O Realtime de mensagens não entrega eventos inseridos pelo browser
+              // do agente confiável ao cliente — o canal de conversas é mais estável.
+              const { data: freshMsgs } = await supabasePublic
+                .from('messages')
+                .select('*')
+                .eq('conversation_id', activeConvId)
+                .order('created_at', { ascending: true });
+              if (!cancelled && freshMsgs && freshMsgs.length > 0) {
+                setMessages(freshMsgs as Message[]);
+              }
             }
           }
         )
