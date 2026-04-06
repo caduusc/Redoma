@@ -793,7 +793,7 @@ const ClientStart: React.FC = () => {
           Trocar dados
         </button>
         <p className="text-[10px] text-slate-400">
-          Conectando você à rede de suporte Redoma.
+          Você está conectado ao ecossistema Redoma.
         </p>
       </div>
     </div>
