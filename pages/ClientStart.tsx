@@ -737,7 +737,7 @@ const ClientStart: React.FC = () => {
         <div className="space-y-2 pt-1">
           <div className="flex items-center gap-2 mb-1">
             <div className="flex-1 h-px bg-slate-100" />
-            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest whitespace-nowrap">
+            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest whitespace-nowrap">
               Não encontrou a comunidade que procurava?
             </span>
             <div className="flex-1 h-px bg-slate-100" />
