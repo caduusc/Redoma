@@ -210,8 +210,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const MSG_GREETING =
     'Olá! Recebemos sua mensagem e já estamos cuidando do seu atendimento. ' +
-    'Nossa equipe pode levar alguns minutos para responder, mas você não precisa ficar aqui — ' +
-    'assim que houver retorno, avisaremos você. 😉';
+    'Nossa equipe pode levar alguns minutos para responder, mas você não precisa esperar aqui - ' +
+    'assim que houver retorno, te avisaremos por whatsapp. 😉';
 
   // Envia MSG 1 via RPC (SECURITY DEFINER — ignora RLS).
   // ID gerado antes do RPC para que o Realtime nunca chegue antes do registro.
