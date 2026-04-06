@@ -738,13 +738,13 @@ const ClientStart: React.FC = () => {
           <div className="flex items-center gap-2 mb-1">
             <div className="flex-1 h-px bg-slate-100" />
             <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest whitespace-nowrap">
-              Comunidade oculta?
+              Não encontrou a comunidade que procurava?
             </span>
             <div className="flex-1 h-px bg-slate-100" />
           </div>
 
           <p className="text-[11px] text-slate-400">
-            Acesse diretamente pelo ID fornecido pela sua comunidade:
+            Acesse diretamente pelo ID da comunidade:
           </p>
 
           <div className="flex gap-2">
