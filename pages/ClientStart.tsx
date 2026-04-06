@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { supabasePublic } from '../lib/supabase';
 import Logo from '../components/Logo';
-import { LayoutGrid, AlertCircle, Loader2, MessageCircle, Users } from 'lucide-react';
+import { LayoutGrid, AlertCircle, Loader2, MessageCircle, Users, Search } from 'lucide-react';
 
 const getOrCreateClientToken = () => {
   const existing = localStorage.getItem('redoma_client_token');
@@ -83,6 +83,11 @@ const ClientStart: React.FC = () => {
   const [communityNameById, setCommunityNameById] = useState<Record<string, string>>({});
   const [communityNameBySlug, setCommunityNameBySlug] = useState<Record<string, string>>({});
   const [loadingNames, setLoadingNames] = useState(false);
+
+  // --- NOVO: campo de acesso direto por ID ---
+  const [directIdInput, setDirectIdInput] = useState('');
+  const [directIdError, setDirectIdError] = useState<string | null>(null);
+  // ------------------------------------------
 
   const requestedCommunity = (searchParams.get('community') || '').trim();
   const autoStartAttemptedRef = useRef<string | null>(null);
@@ -201,6 +206,26 @@ const ClientStart: React.FC = () => {
       setSubmittingConversation(false);
     }
   };
+
+  // --- NOVO: handler do campo de acesso direto ---
+  const handleDirectIdSubmit = async () => {
+    const val = directIdInput.trim();
+    if (!val) return;
+
+    setDirectIdError(null);
+    const success = await startConversationForCommunity(val);
+
+    // startConversationForCommunity já seta communityError em caso de falha,
+    // mas espelhamos no erro local para ficar próximo ao campo
+    if (!success) {
+      setDirectIdError(
+        communityError ||
+          'ID não encontrado. Verifique com a liderança da comunidade.'
+      );
+      setCommunityError(null);
+    }
+  };
+  // -----------------------------------------------
 
   const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFullName(e.target.value);
@@ -688,7 +713,7 @@ const ClientStart: React.FC = () => {
             ) : (
               <>
                 <p className="text-[11px] text-slate-500">
-                  Apoie novamente 
+                  Apoie novamente
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {communitiesUsed.map((cid) => (
@@ -707,6 +732,56 @@ const ClientStart: React.FC = () => {
             )}
           </div>
         )}
+
+        {/* Acesso direto por ID de comunidade oculta */}
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="flex-1 h-px bg-slate-100" />
+            <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest whitespace-nowrap">
+              Comunidade oculta?
+            </span>
+            <div className="flex-1 h-px bg-slate-100" />
+          </div>
+
+          <p className="text-[11px] text-slate-400">
+            Acesse diretamente pelo ID fornecido pela sua comunidade:
+          </p>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={directIdInput}
+              onChange={(e) => {
+                setDirectIdInput(e.target.value);
+                if (directIdError) setDirectIdError(null);
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && handleDirectIdSubmit()}
+              placeholder="ID da comunidade"
+              className="flex-1 border border-slate-200 bg-slate-50/50 rounded-2xl px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-redoma-steel focus:border-transparent transition-all"
+            />
+            <button
+              type="button"
+              onClick={handleDirectIdSubmit}
+              disabled={!directIdInput.trim() || submittingConversation}
+              className="bg-redoma-dark text-white rounded-2xl px-4 py-3 disabled:opacity-40 hover:bg-redoma-navy transition-all active:scale-[0.97] flex items-center justify-center"
+            >
+              {submittingConversation ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Search size={16} />
+              )}
+            </button>
+          </div>
+
+          {directIdError && (
+            <div className="flex items-start gap-2 px-1 animate-in fade-in slide-in-from-top-1">
+              <AlertCircle size={14} className="text-red-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] font-semibold text-red-600 leading-tight">
+                {directIdError}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="px-6 pb-5 pt-0 flex justify-between items-center border-t border-slate-100 mt-4">
