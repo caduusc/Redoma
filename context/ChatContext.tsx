@@ -209,9 +209,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const autoMessageIdsRef   = useRef<Set<string>>(new Set());
 
   const MSG_GREETING =
-  'Olá! Recebemos sua mensagem e já estamos cuidando do seu atendimento. ' +
-  'Nossa equipe pode levar alguns minutos para responder, mas você não precisa ficar aqui, ' +
-  'assim que houver retorno, te avisaremos por whatsapp. 😉';
+    'Olá! Recebemos sua mensagem e já estamos cuidando do seu atendimento. ' +
+    'Nossa equipe pode levar alguns minutos para responder, mas você não precisa ficar aqui — ' +
+    'assim que houver retorno, avisaremos você. 😉';
 
   // Envia MSG 1 via RPC (SECURITY DEFINER — ignora RLS).
   // ID gerado antes do RPC para que o Realtime nunca chegue antes do registro.
@@ -528,6 +528,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               const [enriched] = await enrichConversations(supabasePublic, [p.new]);
               if (!cancelled && enriched) {
                 upsertConversationRef.current(enriched);
+              }
+
+              // Re-busca mensagens quando a conversa é tocada pelo send_auto_message
+              // (UPDATE em last_agent_seen_at), garantindo que MSG 1 apareça ao cliente
+              // mesmo que o Realtime de mensagens não entregue eventos do role postgres.
+              const { data: freshMsgs } = await supabasePublic
+                .from('messages')
+                .select('*')
+                .eq('conversation_id', activeConvId)
+                .order('created_at', { ascending: true });
+              if (!cancelled && freshMsgs && freshMsgs.length > 0) {
+                setMessages(freshMsgs as Message[]);
               }
             }
           }
