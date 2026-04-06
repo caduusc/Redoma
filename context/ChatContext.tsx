@@ -56,7 +56,6 @@ interface ChatContextType {
   getMessages: (conversationId: string) => Message[];
 
   setActiveConversationId: (id: string | null) => void;
-  refreshActiveConversation: () => Promise<void>;
 
   notificationPermission: 'default' | 'granted' | 'denied' | 'unsupported';
   notificationsEnabled: boolean;
@@ -186,8 +185,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     localStorage.getItem('redoma_active_conv')
   );
 
-  const [agentToast, setAgentToast] =
-    useState<ChatContextType['agentToast']>(null);
+  const [agentToast, setAgentToast] = useState<ChatContextType['agentToast']>(null);
   const toastTimerRef = useRef<number | null>(null);
 
   const isAgent = useMemo(() => !!currentUser, [currentUser]);
@@ -202,29 +200,40 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   } = useAgentNotifications();
 
   const notifiedMsgIds = useRef<Set<string>>(new Set());
-  const processedMsgIdsRef = useRef<Set<string>>(new Set());
 
+  // ─── MSG 1 — saudação imediata na primeira mensagem do cliente ────────────────
+  // autoGreetingSentRef: convIds onde a MSG 1 já foi enviada (evita duplicatas)
+  // autoMessageIdsRef:   IDs gerados antes do RPC para que o Realtime não
+  //                      confunda MSG 1 com mensagem real do agente
   const autoGreetingSentRef = useRef<Set<string>>(new Set());
-  const autoMessageIdsRef = useRef<Set<string>>(new Set());
-  const agentDelayTimerRef = useRef<
-    Record<string, ReturnType<typeof setTimeout>>
-  >({});
+  const autoMessageIdsRef   = useRef<Set<string>>(new Set());
 
   const MSG_GREETING =
-  'Olá! Recebemos sua mensagem e nosso time já foi notificado. ' +
-  'Em instantes um atendente irá te responder.\n\n' +
-  'Se precisar sair do aplicativo, fique tranquilo, ' +
-  'te avisaremos pelo WhatsApp cadastrado assim que houver uma resposta.';
+  'Olá! Recebemos sua mensagem e já estamos cuidando do seu atendimento. ' +
+  'Nossa equipe pode levar alguns minutos para responder, mas você não precisa ficar aqui, ' +
+  'assim que houver retorno, te avisaremos por whatsapp. 😉';
 
-  const MSG_DELAY =
-  'Estamos com um volume de atendimentos acima do normal no momento, ' +
-  'mas sua solicitação já está na fila e será atendida em breve.\n\n' +
-  'Assim que um atendente assumir seu atendimento, você será notificado.';
-
-  const upsertMessageRef = useRef<(msg: Message) => void>(() => {});
-  const upsertConversationRef = useRef<(conv: Conversation | any) => void>(
-    () => {}
-  );
+  // Envia MSG 1 via RPC (SECURITY DEFINER — ignora RLS).
+  // ID gerado antes do RPC para que o Realtime nunca chegue antes do registro.
+  const sendAutoGreeting = useCallback(async (convId: string) => {
+    const msgId = genId();
+    autoMessageIdsRef.current.add(msgId);
+    try {
+      const { error } = await supabasePublic.rpc('send_auto_message', {
+        p_id: msgId,
+        p_conversation_id: convId,
+        p_text: MSG_GREETING,
+      });
+      if (error) {
+        autoMessageIdsRef.current.delete(msgId);
+        console.error('[AutoMsg] Erro ao enviar saudação automática:', error);
+      }
+    } catch (err) {
+      autoMessageIdsRef.current.delete(msgId);
+      console.error('[AutoMsg] Exceção ao enviar saudação automática:', err);
+    }
+  }, []);
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const upsertConversation = useCallback((conv: Conversation | any) => {
     const normalizedConv = normalizeConversation(conv);
@@ -267,212 +276,64 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   }, []);
 
-  const refreshActiveConversation = useCallback(async () => {
-    if (isAgent) return;
-    if (!activeConvId) {
-      setConversations([]);
-      setMessages([]);
-      processedMsgIdsRef.current.clear();
-      return;
-    }
+  const upsertMessage = useCallback((msg: Message) => {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === msg.id)) return prev;
 
-    try {
-      await ensureClientAuthReady();
+      const next = [...prev, msg];
 
-      const { data: conv, error: convErr } = await supabasePublic
-        .from('conversations')
-        .select('*')
-        .eq('id', activeConvId)
-        .maybeSingle();
+      next.sort((a, b) => {
+        const ta = new Date(a.created_at).getTime();
+        const tb = new Date(b.created_at).getTime();
+        if (ta !== tb) return ta - tb;
 
-      if (convErr) {
-        console.error('[refreshActiveConversation] conversation error', convErr);
-      } else {
-        const enrichedClientConvs = conv
-          ? await enrichConversations(supabasePublic, [conv])
-          : [];
-        setConversations(enrichedClientConvs as Conversation[]);
-      }
+        const sa = a.sender_type === 'client' ? 0 : 1;
+        const sb = b.sender_type === 'client' ? 0 : 1;
+        if (sa !== sb) return sa - sb;
 
-      const { data: freshMsgs, error: msgErr } = await supabasePublic
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', activeConvId)
-        .order('created_at', { ascending: true });
-
-      if (msgErr) {
-        console.error('[refreshActiveConversation] messages error', msgErr);
-        return;
-      }
-
-      setMessages((freshMsgs || []) as Message[]);
-      processedMsgIdsRef.current = new Set(
-        ((freshMsgs || []) as Message[]).map((m) => m.id)
-      );
-    } catch (e) {
-      console.error('[refreshActiveConversation] failed', e);
-    }
-  }, [activeConvId, isAgent]);
-
-  const sendAutoMessage = useCallback(
-    async (convId: string, text: string) => {
-      const msgId = genId();
-      autoMessageIdsRef.current.add(msgId);
-
-      const payload = {
-        id: msgId,
-        conversation_id: convId,
-        sender_type: 'agent' as const,
-        message_type: 'text' as const,
-        text,
-        is_auto: true,
-        created_at: new Date().toISOString(),
-      };
-
-      try {
-        if (isAgent) {
-          upsertMessageRef.current(payload as any);
-
-          const { error } = await supabaseSupport.from('messages').insert(payload);
-
-          if (error) {
-            setMessages((prev) => prev.filter((m) => m.id !== msgId));
-            processedMsgIdsRef.current.delete(msgId);
-            autoMessageIdsRef.current.delete(msgId);
-            console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
-            return;
-          }
-        } else {
-          const { error } = await supabasePublic.rpc('send_auto_message', {
-            p_id: msgId,
-            p_conversation_id: convId,
-            p_text: text,
-          });
-
-          if (error) {
-            autoMessageIdsRef.current.delete(msgId);
-            console.error('[AutoMsg] Erro ao enviar mensagem automática:', error);
-          }
-        }
-      } catch (err) {
-        autoMessageIdsRef.current.delete(msgId);
-        processedMsgIdsRef.current.delete(msgId);
-        console.error('[AutoMsg] Exceção ao enviar mensagem automática:', err);
-      }
-    },
-    [isAgent]
-  );
-
-  const sendDelayMessageIfNeeded = useCallback(async (convId: string) => {
-    try {
-      const { error } = await supabaseSupport.rpc(
-        'send_delay_message_if_needed',
-        {
-          p_conversation_id: convId,
-          p_text: MSG_DELAY,
-        }
-      );
-
-      if (error) {
-        console.error('[AutoMsg delay] erro ao enviar MSG 2:', error);
-      }
-    } catch (err) {
-      console.error('[AutoMsg delay] exceção:', err);
-    }
-  }, []);
-
-  const clearAgentDelayTimer = useCallback((convId: string) => {
-    if (agentDelayTimerRef.current[convId]) {
-      clearTimeout(agentDelayTimerRef.current[convId]);
-      delete agentDelayTimerRef.current[convId];
-    }
-  }, []);
-
-  const upsertMessage = useCallback(
-    (msg: Message) => {
-      if (processedMsgIdsRef.current.has(msg.id)) return;
-      processedMsgIdsRef.current.add(msg.id);
-
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev;
-
-        const next = [...prev, msg];
-
-        next.sort((a, b) => {
-          const ta = new Date(a.created_at).getTime();
-          const tb = new Date(b.created_at).getTime();
-          if (ta !== tb) return ta - tb;
-
-          const sa = a.sender_type === 'client' ? 0 : 1;
-          const sb = b.sender_type === 'client' ? 0 : 1;
-          if (sa !== sb) return sa - sb;
-
-          return String(a.id).localeCompare(String(b.id));
-        });
-
-        return next;
+        return String(a.id).localeCompare(String(b.id));
       });
 
-      if (msg.sender_type === 'agent') {
-        const isAutoMsg =
-          (msg as any).is_auto === true || autoMessageIdsRef.current.has(msg.id);
+      return next;
+    });
 
-        autoMessageIdsRef.current.delete(msg.id);
+    // Remove o ID do autoMessageIdsRef quando MSG 1 volta via Realtime
+    if (msg.sender_type === 'agent' && autoMessageIdsRef.current.has(msg.id)) {
+      autoMessageIdsRef.current.delete(msg.id);
+    }
 
-        if (!isAutoMsg) {
-          clearAgentDelayTimer(msg.conversation_id);
-        }
-      }
+    if (
+      isAgent &&
+      msg.sender_type === 'client' &&
+      !notifiedMsgIds.current.has(msg.id)
+    ) {
+      notifiedMsgIds.current.add(msg.id);
+      const preview =
+        msg.message_type === 'image'
+          ? '📷 Imagem recebida'
+          : msg.text?.slice(0, 80) || 'Nova mensagem';
 
-      if (msg.sender_type === 'client' && isAgent) {
-        clearAgentDelayTimer(msg.conversation_id);
-
-        agentDelayTimerRef.current[msg.conversation_id] = setTimeout(() => {
-          sendDelayMessageIfNeeded(msg.conversation_id);
-          delete agentDelayTimerRef.current[msg.conversation_id];
-        }, 45_000);
-      }
-
-      if (
-        isAgent &&
-        msg.sender_type === 'client' &&
-        !notifiedMsgIds.current.has(msg.id)
-      ) {
-        notifiedMsgIds.current.add(msg.id);
-        const preview =
-          msg.message_type === 'image'
-            ? '📷 Imagem recebida'
-            : msg.text?.slice(0, 80) || 'Nova mensagem';
-
-        if (!activeConvId || msg.conversation_id !== activeConvId) {
-          if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-          setAgentToast({
-            id: msg.id,
-            title: '💬 Nova mensagem de cliente',
-            body: preview,
-            conversationId: msg.conversation_id,
-            createdAt: Date.now(),
-          });
-          toastTimerRef.current = window.setTimeout(() => {
-            setAgentToast(null);
-            toastTimerRef.current = null;
-          }, 7000);
-        }
-
-        notify({
+      if (!activeConvId || msg.conversation_id !== activeConvId) {
+        if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+        setAgentToast({
+          id: msg.id,
           title: '💬 Nova mensagem de cliente',
           body: preview,
+          conversationId: msg.conversation_id,
+          createdAt: Date.now(),
         });
+        toastTimerRef.current = window.setTimeout(() => {
+          setAgentToast(null);
+          toastTimerRef.current = null;
+        }, 7000);
       }
-    },
-    [
-      isAgent,
-      notify,
-      activeConvId,
-      clearAgentDelayTimer,
-      sendDelayMessageIfNeeded,
-    ]
-  );
+
+      notify({
+        title: '💬 Nova mensagem de cliente',
+        body: preview,
+      });
+    }
+  }, [isAgent, notify, activeConvId]);
 
   const removeOptimisticMessage = useCallback((id: string) => {
     setMessages((prev) => prev.filter((m) => m.id !== id));
@@ -492,14 +353,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     setAgentToast(null);
   }, []);
 
-  useEffect(() => {
-    upsertMessageRef.current = upsertMessage;
-  }, [upsertMessage]);
+  // ─── Refs estáveis para callbacks ────────────────────────────────────────────
+  const upsertMessageRef = useRef(upsertMessage);
+  useEffect(() => { upsertMessageRef.current = upsertMessage; }, [upsertMessage]);
 
-  useEffect(() => {
-    upsertConversationRef.current = upsertConversation;
-  }, [upsertConversation]);
+  const upsertConversationRef = useRef(upsertConversation);
+  useEffect(() => { upsertConversationRef.current = upsertConversation; }, [upsertConversation]);
 
+  // ─── Efeito 1: AGENTE ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAgent) return;
 
@@ -545,11 +406,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (cancelled) return;
       if (msgErr) console.error('[support fetch messages]', msgErr);
-
       setMessages((msgs || []) as Message[]);
-      processedMsgIdsRef.current = new Set(
-        ((msgs || []) as Message[]).map((m) => m.id)
-      );
 
       convChannel = supabaseSupport
         .channel('support_convs')
@@ -558,9 +415,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           { event: '*', schema: 'public', table: 'conversations' },
           async (p: any) => {
             if (p?.new) {
-              const [enriched] = await enrichConversations(supabaseSupport, [
-                p.new,
-              ]);
+              const [enriched] = await enrichConversations(supabaseSupport, [p.new]);
               if (!cancelled && enriched) {
                 upsertConversationRef.current(enriched);
               }
@@ -569,9 +424,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         )
         .subscribe((status: string) => {
           if (status === 'CHANNEL_ERROR') {
-            console.error(
-              '[realtime] support_convs error — verifique Replication no Supabase Dashboard'
-            );
+            console.error('[realtime] support_convs error — verifique Replication no Supabase Dashboard');
           }
         });
 
@@ -584,9 +437,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         )
         .subscribe((status: string) => {
           if (status === 'CHANNEL_ERROR') {
-            console.error(
-              '[realtime] support_msgs error — verifique Replication no Supabase Dashboard'
-            );
+            console.error('[realtime] support_msgs error — verifique Replication no Supabase Dashboard');
           }
         });
     };
@@ -596,21 +447,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       cancelled = true;
       void safeUnsub();
-
-      Object.values(agentDelayTimerRef.current).forEach((timer) =>
-        clearTimeout(timer)
-      );
-      agentDelayTimerRef.current = {};
     };
   }, [isAgent]);
 
+  // ─── Efeito 2: CLIENTE ───────────────────────────────────────────────────────
   useEffect(() => {
     if (isAgent) return;
 
     let convChannel: any;
     let msgChannel: any;
     let cancelled = false;
-    let removeResumeListeners: (() => void) | null = null;
 
     const safeUnsub = async () => {
       try {
@@ -628,9 +474,44 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     const boot = async () => {
-      await refreshActiveConversation();
+      try {
+        await ensureClientAuthReady();
+      } catch (e) {
+        console.error('[client auth] failed', e);
+        return;
+      }
 
-      if (cancelled || !activeConvId) return;
+      if (!activeConvId) {
+        setConversations([]);
+        setMessages([]);
+        return;
+      }
+
+      const { data: conv, error: convErr } = await supabasePublic
+        .from('conversations')
+        .select('*')
+        .eq('id', activeConvId)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (convErr) console.error('[client fetch active conversation]', convErr);
+
+      const enrichedClientConvs = conv
+        ? await enrichConversations(supabasePublic, [conv])
+        : [];
+
+      if (cancelled) return;
+      setConversations(enrichedClientConvs as Conversation[]);
+
+      const { data: msgs, error: msgErr } = await supabasePublic
+        .from('messages')
+        .select('*')
+        .eq('conversation_id', activeConvId)
+        .order('created_at', { ascending: true });
+
+      if (cancelled) return;
+      if (msgErr) console.error('[client fetch active messages]', msgErr);
+      setMessages((msgs || []) as Message[]);
 
       convChannel = supabasePublic
         .channel(`client_conversations_${activeConvId}`)
@@ -644,9 +525,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           },
           async (p: any) => {
             if (p?.new) {
-              const [enriched] = await enrichConversations(supabasePublic, [
-                p.new,
-              ]);
+              const [enriched] = await enrichConversations(supabasePublic, [p.new]);
               if (!cancelled && enriched) {
                 upsertConversationRef.current(enriched);
               }
@@ -668,45 +547,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
           (p: any) => p?.new && upsertMessageRef.current(p.new as Message)
         )
         .subscribe(async (status: string) => {
+          // Quando o canal reconecta (inclusive após suspensão mobile),
+          // busca mensagens frescas para não perder nenhuma enviada durante a ausência.
           if (status === 'SUBSCRIBED' && !cancelled) {
-            await refreshActiveConversation();
+            const { data: freshMsgs } = await supabasePublic
+              .from('messages')
+              .select('*')
+              .eq('conversation_id', activeConvId)
+              .order('created_at', { ascending: true });
+            if (!cancelled && freshMsgs && freshMsgs.length > 0) {
+              setMessages(freshMsgs as Message[]);
+            }
           }
         });
-
-      const handleResume = async () => {
-        if (cancelled || !activeConvId) return;
-
-        if (
-          typeof document !== 'undefined' &&
-          document.visibilityState === 'hidden'
-        ) {
-          return;
-        }
-
-        await refreshActiveConversation();
-      };
-
-      window.addEventListener('focus', handleResume);
-      window.addEventListener('pageshow', handleResume);
-      window.addEventListener('online', handleResume);
-      document.addEventListener('visibilitychange', handleResume);
-
-      removeResumeListeners = () => {
-        window.removeEventListener('focus', handleResume);
-        window.removeEventListener('pageshow', handleResume);
-        window.removeEventListener('online', handleResume);
-        document.removeEventListener('visibilitychange', handleResume);
-      };
     };
 
     boot();
 
     return () => {
       cancelled = true;
-      removeResumeListeners?.();
       void safeUnsub();
     };
-  }, [isAgent, activeConvId, refreshActiveConversation]);
+  }, [isAgent, activeConvId]);
 
   const login = (email: string) => {
     const user: User = {
@@ -772,6 +634,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   ) => {
     if (senderType !== 'agent') await ensureClientAuthReady();
 
+    // ─── MSG 1: saudação imediata na primeira mensagem do cliente ─────────────
     if (senderType === 'client') {
       const existingClientMsgs = messages.filter(
         (m) => m.conversation_id === conversationId && m.sender_type === 'client'
@@ -782,9 +645,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         !autoGreetingSentRef.current.has(conversationId)
       ) {
         autoGreetingSentRef.current.add(conversationId);
-        setTimeout(() => sendAutoMessage(conversationId, MSG_GREETING), 800);
+        setTimeout(() => sendAutoGreeting(conversationId), 800);
       }
     }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const optimisticId = genId();
 
@@ -809,7 +673,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (error) {
       console.error('[addMessage] insert error', error);
       removeOptimisticMessage(optimisticId);
-      processedMsgIdsRef.current.delete(optimisticId);
       throw error;
     }
 
@@ -854,7 +717,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     if (error) {
       console.error('[sendImageMessage] insert error', error);
       removeOptimisticMessage(optimisticId);
-      processedMsgIdsRef.current.delete(optimisticId);
       throw error;
     }
 
@@ -898,8 +760,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const getConversation = (id: string) =>
-    conversations.find((c) => c.id === id);
+  const getConversation = (id: string) => conversations.find((c) => c.id === id);
 
   const getMessages = (conversationId: string) =>
     messages.filter((m) => m.conversation_id === conversationId);
@@ -922,7 +783,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
         getConversation,
         getMessages,
         setActiveConversationId,
-        refreshActiveConversation,
         notificationPermission,
         notificationsEnabled,
         notificationsSupported,
