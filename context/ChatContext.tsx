@@ -276,11 +276,22 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   }, []);
 
+  // ─── FIX: upsertMessage agora substitui mensagem existente em vez de ignorar ──
+  // Isso garante que mensagens otimistas (com created_at do frontend) sejam
+  // atualizadas com o timestamp real do servidor após confirmação do DB,
+  // evitando clock skew que causava a saudação automática aparecer antes da
+  // mensagem do cliente no desktop.
   const upsertMessage = useCallback((msg: Message) => {
     setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev;
+      const existingIdx = prev.findIndex((m) => m.id === msg.id);
 
-      const next = [...prev, msg];
+      let next: Message[];
+      if (existingIdx !== -1) {
+        // Substitui mensagem existente (ex: otimista → confirmada com created_at do servidor)
+        next = prev.map((m, i) => (i === existingIdx ? msg : m));
+      } else {
+        next = [...prev, msg];
+      }
 
       next.sort((a, b) => {
         const ta = new Date(a.created_at).getTime();
@@ -688,6 +699,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       throw error;
     }
 
+    // Atualiza a mensagem otimista com os dados reais do servidor (incluindo created_at real).
+    // Necessário para evitar clock skew na ordenação com a saudação automática.
     if (data) upsertMessage(data as Message);
   };
 
