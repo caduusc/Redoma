@@ -675,7 +675,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const optimisticId = genId();
 
-    const payload = {
+    // Payload otimista (só para UI local) — usa created_at do frontend para exibição imediata
+    const optimisticPayload = {
       id: optimisticId,
       conversation_id: conversationId,
       sender_type: senderType,
@@ -684,12 +685,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       created_at: new Date().toISOString(),
     };
 
-    upsertMessage(payload as any);
+    upsertMessage(optimisticPayload as any);
+
+    // Payload do DB SEM created_at — deixa o Postgres usar DEFAULT now().
+    // Isso garante que o timestamp da mensagem do cliente e o da saudação automática
+    // sejam ambos gerados pelo servidor, eliminando clock skew entre frontend e DB.
+    const dbPayload = {
+      id: optimisticId,
+      conversation_id: conversationId,
+      sender_type: senderType,
+      message_type: 'text' as const,
+      text,
+    };
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
     const { data, error } = await client
       .from('messages')
-      .insert(payload as any)
+      .insert(dbPayload as any)
       .select('*')
       .single();
 
@@ -699,8 +711,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       throw error;
     }
 
-    // Atualiza a mensagem otimista com os dados reais do servidor (incluindo created_at real).
-    // Necessário para evitar clock skew na ordenação com a saudação automática.
+    // Substitui o otimista pelo confirmado (com created_at real do servidor)
     if (data) upsertMessage(data as Message);
   };
 
@@ -719,7 +730,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
 
     const optimisticId = genId();
 
-    const payload = {
+    // Payload otimista (só para UI local)
+    const optimisticPayload = {
       id: optimisticId,
       conversation_id: conversationId,
       sender_type: senderType,
@@ -730,12 +742,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       created_at: new Date().toISOString(),
     };
 
-    upsertMessage(payload as any);
+    upsertMessage(optimisticPayload as any);
+
+    // Payload do DB SEM created_at — deixa o Postgres usar DEFAULT now()
+    const dbPayload = {
+      id: optimisticId,
+      conversation_id: conversationId,
+      sender_type: senderType,
+      message_type: 'image' as const,
+      text: '',
+      image_url: publicUrl,
+      storage_path: path,
+    };
 
     const client = senderType === 'agent' ? supabaseSupport : supabasePublic;
     const { data, error } = await client
       .from('messages')
-      .insert(payload as any)
+      .insert(dbPayload as any)
       .select('*')
       .single();
 
