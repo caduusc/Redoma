@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { supabasePublic } from '../lib/supabase';
 import Logo from '../components/Logo';
-import { AlertCircle, Loader2, MessageCircle, Users, Search } from 'lucide-react';
+import { LayoutGrid, AlertCircle, Loader2, MessageCircle, Users, Search } from 'lucide-react';
 
 const getOrCreateClientToken = () => {
   const existing = localStorage.getItem('redoma_client_token');
@@ -215,8 +215,6 @@ const ClientStart: React.FC = () => {
     setDirectIdError(null);
     const success = await startConversationForCommunity(val);
 
-    // startConversationForCommunity já seta communityError em caso de falha,
-    // mas espelhamos no erro local para ficar próximo ao campo
     if (!success) {
       setDirectIdError(
         communityError ||
@@ -812,6 +810,19 @@ const ClientStart: React.FC = () => {
             Crescimento Inteligente para comunidades
           </p>
         </div>
+
+        {step === 'COMMUNITY' && (
+          <div className="px-6 py-4 border-b border-slate-50 bg-slate-50/30">
+            <button
+              type="button"
+              onClick={() => navigate('/client/providers')}
+              className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
+            >
+              <LayoutGrid size={18} className="group-hover:scale-110 transition-transform" />
+              Parceiros & Cashback
+            </button>
+          </div>
+        )}
 
         {step === 'IDENTITY' ? renderIdentityStep() : renderCommunityStep()}
       </div>
