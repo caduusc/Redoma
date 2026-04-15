@@ -10,8 +10,12 @@ type CommunityFormData = {
   slug: string;
   description?: string | null;
   logo_url?: string | null;
+  instagram_url?: string | null;
   isActive: boolean;
 };
+
+const inputClassName =
+  'w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/50 text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-redoma-steel focus:outline-none';
 
 const AdminCommunities: React.FC = () => {
   const { communities, addCommunity, updateCommunity, deleteCommunity, toggleActive } =
@@ -25,6 +29,7 @@ const AdminCommunities: React.FC = () => {
     slug: '',
     description: '',
     logo_url: null,
+    instagram_url: '',
     isActive: true,
   });
 
@@ -40,6 +45,7 @@ const AdminCommunities: React.FC = () => {
       slug: '',
       description: '',
       logo_url: null,
+      instagram_url: '',
       isActive: true,
     });
     setLogoFile(null);
@@ -54,6 +60,7 @@ const AdminCommunities: React.FC = () => {
         slug: (c.slug ?? '').toString(),
         description: c.description ?? '',
         logo_url: c.logo_url ?? null,
+        instagram_url: (c as any).instagram_url ?? '',
         isActive: c.isActive,
       });
       setLogoFile(null);
@@ -87,6 +94,7 @@ const AdminCommunities: React.FC = () => {
 
       const name = formData.name.trim();
       const slug = formData.slug.trim().toLowerCase();
+      const instagramUrl = formData.instagram_url?.trim() || null;
 
       if (!name) {
         alert('Informe o nome.');
@@ -97,20 +105,15 @@ const AdminCommunities: React.FC = () => {
         return;
       }
 
-      // IMPORTANTE:
-      // - Para subir logo no create, precisamos de um id.
-      // - Então: primeiro cria/atualiza, depois (se tiver arquivo) faz upload e atualiza logo_url.
       if (!editingCommunity) {
-        // CREATE primeiro
         const created = await addCommunity({
           ...formData,
           name,
           slug,
+          instagram_url: instagramUrl,
           logo_url: null,
         } as any);
 
-        // Se seu addCommunity NÃO retorna a comunidade criada, ajuste seu context para retornar.
-        // Fallback: tenta pegar pelo slug na lista depois.
         const createdId =
           (created as any)?.id ||
           communities.find((c) => (c.slug || '').toLowerCase() === slug)?.id ||
@@ -123,6 +126,7 @@ const AdminCommunities: React.FC = () => {
             ...formData,
             name,
             slug,
+            instagram_url: instagramUrl,
             logo_url: publicUrl,
           } as any);
         } else if (logoFile && !createdId) {
@@ -131,7 +135,6 @@ const AdminCommunities: React.FC = () => {
           );
         }
       } else {
-        // UPDATE (se tiver logo, faz upload usando o id existente)
         let finalLogoUrl: string | null = formData.logo_url ?? null;
 
         if (logoFile) {
@@ -143,6 +146,7 @@ const AdminCommunities: React.FC = () => {
           ...formData,
           name,
           slug,
+          instagram_url: instagramUrl,
           logo_url: finalLogoUrl,
         } as any);
       }
@@ -175,7 +179,6 @@ const AdminCommunities: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* MOBILE */}
         <div className="block md:hidden divide-y divide-slate-100">
           {communitiesSorted.map((c) => (
             <div key={c.id} className="p-4 flex flex-col gap-3">
@@ -252,7 +255,6 @@ const AdminCommunities: React.FC = () => {
           )}
         </div>
 
-        {/* DESKTOP */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full min-w-[760px] text-left">
             <thead>
@@ -355,7 +357,6 @@ const AdminCommunities: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-xl rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
@@ -364,55 +365,70 @@ const AdminCommunities: React.FC = () => {
                 {editingCommunity ? 'Editar Comunidade' : 'Nova Comunidade'}
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                Cadastre nome, slug e (opcional) logo/descrição.
+                Cadastre nome, slug e, se quiser, descrição, logo e Instagram.
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                     Nome
                   </label>
                   <input
                     value={formData.name}
                     onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/50 focus:ring-2 focus:ring-redoma-steel focus:outline-none"
+                    className={inputClassName}
                     placeholder="Ex: Instituto Luz"
                   />
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                     Slug
                   </label>
                   <input
                     value={formData.slug}
                     onChange={(e) => setFormData((p) => ({ ...p, slug: e.target.value }))}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/50 focus:ring-2 focus:ring-redoma-steel focus:outline-none"
+                    className={inputClassName}
                     placeholder="ex: instituto-luz"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                   Descrição (opcional)
                 </label>
                 <textarea
                   value={formData.description ?? ''}
                   onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/50 focus:ring-2 focus:ring-redoma-steel focus:outline-none min-h-[90px]"
+                  className={`${inputClassName} min-h-[90px]`}
                   placeholder="Ex: Comunidade de apoio social e renda colaborativa."
                 />
               </div>
 
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  Link do Instagram (opcional)
+                </label>
+                <input
+                  value={formData.instagram_url ?? ''}
+                  onChange={(e) => setFormData((p) => ({ ...p, instagram_url: e.target.value }))}
+                  className={inputClassName}
+                  placeholder="https://instagram.com/nomedacomunidade"
+                />
+                <p className="text-[11px] text-slate-400">
+                  Se preencher, o botão de Instagram aparecerá para essa comunidade no app.
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                     Logo (opcional)
                   </label>
-                  <input type="file" accept="image/*" onChange={handleLogoChange} />
+                  <input type="file" accept="image/*" onChange={handleLogoChange} className="text-sm text-slate-700" />
                   {!editingCommunity && logoFile ? (
                     <p className="text-[10px] text-slate-400 mt-2">
                       A logo será enviada após salvar a comunidade (precisamos do ID).
@@ -433,7 +449,7 @@ const AdminCommunities: React.FC = () => {
                     </div>
                   )}
 
-                  <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
+                  <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
                     <input
                       type="checkbox"
                       checked={formData.isActive}
@@ -452,7 +468,7 @@ const AdminCommunities: React.FC = () => {
                     setIsModalOpen(false);
                     resetForm();
                   }}
-                  className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs uppercase tracking-widest disabled:opacity-70"
+                  className="flex-1 px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-widest disabled:opacity-70"
                 >
                   Cancelar
                 </button>

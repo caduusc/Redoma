@@ -19,6 +19,8 @@ import AdminLogin from './pages/AdminLogin';
 import AdminProviders from './pages/AdminProviders';
 import AdminCommunities from './pages/AdminCommunities';
 
+import { ImpactPointsPage } from './src/features/ImpactPoints';
+
 import AdminGuard from './components/AdminGuard';
 import SupportGuard from './components/SupportGuard';
 import AgentToastContainer from './components/AgentToastContainer';
@@ -36,6 +38,10 @@ const App: React.FC = () => {
               <Route path="/client/chat" element={<ClientChat />} />
               <Route path="/client/providers" element={<ClientProviders />} />
               <Route path="/client/communities" element={<ClientCommunities />} />
+              <Route
+                path="/client/impact-points"
+                element={<ImpactPointsPage onBack={() => window.history.back()} />}
+              />
 
               {/* Support (com atrito / login) */}
               <Route path="/agent/login" element={<AgentLogin />} />
