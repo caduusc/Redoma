@@ -2,7 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabasePublic } from '../lib/supabase';
 import Logo from '../components/Logo';
-import { ArrowLeft, Loader2, Search, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  Loader2,
+  Search,
+  Users,
+  Share2,
+  Instagram,
+  Check,
+} from 'lucide-react';
 
 type CommunityRow = {
   id: string;
@@ -10,8 +18,11 @@ type CommunityRow = {
   slug?: string | null;
   description?: string | null;
   logo_url?: string | null;
+  instagram_url?: string | null;
   isActive: boolean;
 };
+
+const REDOMA_PUBLIC_URL = 'https://redoma.vercel.app/';
 
 const ClientCommunities: React.FC = () => {
   const navigate = useNavigate();
@@ -19,6 +30,7 @@ const ClientCommunities: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [communities, setCommunities] = useState<CommunityRow[]>([]);
   const [query, setQuery] = useState('');
+  const [shareFeedbackId, setShareFeedbackId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCommunities = async () => {
@@ -26,7 +38,7 @@ const ClientCommunities: React.FC = () => {
       try {
         const { data, error } = await supabasePublic
           .from('communities')
-          .select('id, name, slug, description, logo_url, isActive')
+          .select('id, name, slug, description, logo_url, instagram_url, isActive')
           .eq('isActive', true)
           .order('name', { ascending: true });
 
@@ -59,6 +71,95 @@ const ClientCommunities: React.FC = () => {
 
   const handleChooseCommunity = (publicId: string) => {
     navigate(`/client/start?community=${encodeURIComponent(publicId)}`);
+  };
+
+  const buildShareMessage = (communityName: string) => {
+    return `Olá, estou apoiando a ${communityName} através da Redoma sem custo algum. Apoie uma causa você também! ${REDOMA_PUBLIC_URL}`;
+  };
+
+  const creditSharePoints = async (community: CommunityRow) => {
+    const phoneNormalized = localStorage.getItem('redoma_phone');
+    const fullName = localStorage.getItem('redoma_full_name');
+
+    if (!phoneNormalized) return;
+
+    try {
+      const { data, error } = await supabasePublic.rpc('credit_monthly_community_share_points', {
+        p_phone_normalized: phoneNormalized,
+        p_community_id: community.id,
+        p_community_name: community.name,
+        p_full_name: fullName,
+      });
+
+      if (error) {
+        console.error('[ClientCommunities] share points rpc error', error);
+        return;
+      }
+
+      if (data?.reason === 'monthly_limit_reached') {
+        console.info('[ClientCommunities] monthly share limit reached');
+      }
+    } catch (err) {
+      console.error('[ClientCommunities] share points unexpected error', err);
+    }
+  };
+
+  const handleShareCommunity = async (community: CommunityRow) => {
+    const message = buildShareMessage(community.name);
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `Apoie ${community.name} na Redoma`,
+          text: message,
+          url: REDOMA_PUBLIC_URL,
+        });
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(message);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = message;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
+
+      await creditSharePoints(community);
+
+      setShareFeedbackId(community.id);
+      window.setTimeout(() => {
+        setShareFeedbackId((current) => (current === community.id ? null : current));
+      }, 2000);
+    } catch (err) {
+      console.error('[ClientCommunities] share error', err);
+    }
+  };
+
+  const handleOpenInstagram = async (community: CommunityRow) => {
+    if (!community.instagram_url) return;
+
+    const phoneNormalized = localStorage.getItem('redoma_phone');
+    const fullName = localStorage.getItem('redoma_full_name');
+
+    try {
+      if (phoneNormalized) {
+        const { error } = await supabasePublic.rpc('credit_community_instagram_visit_points', {
+          p_phone_normalized: phoneNormalized,
+          p_community_id: community.id,
+          p_community_name: community.name,
+          p_full_name: fullName,
+        });
+
+        if (error) {
+          console.error('[ClientCommunities] instagram points rpc error', error);
+        }
+      }
+    } catch (err) {
+      console.error('[ClientCommunities] instagram points unexpected error', err);
+    } finally {
+      window.open(community.instagram_url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   return (
@@ -117,6 +218,7 @@ const ClientCommunities: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
               {filtered.map((c) => {
                 const publicId = getPublicId(c);
+                const shareDone = shareFeedbackId === c.id;
 
                 return (
                   <div
@@ -151,7 +253,33 @@ const ClientCommunities: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="mt-auto pt-5">
+                    <div className="mt-auto pt-5 space-y-3">
+                      <div
+                        className={`grid gap-3 ${
+                          c.instagram_url ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleShareCommunity(c)}
+                          className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-slate-200 bg-white text-slate-700 font-bold text-[10px] uppercase tracking-widest hover:border-redoma-steel/40 hover:text-redoma-dark transition"
+                        >
+                          {shareDone ? <Check size={14} /> : <Share2 size={14} />}
+                          {shareDone ? 'Compartilhado' : 'Compartilhar'}
+                        </button>
+
+                        {c.instagram_url ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenInstagram(c)}
+                            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-slate-200 bg-white text-slate-700 font-bold text-[10px] uppercase tracking-widest hover:border-redoma-steel/40 hover:text-redoma-dark transition"
+                          >
+                            <Instagram size={14} />
+                            Visite o Instagram
+                          </button>
+                        ) : null}
+                      </div>
+
                       <button
                         type="button"
                         onClick={() => handleChooseCommunity(publicId)}

@@ -4,6 +4,7 @@ import { useChat } from '../context/ChatContext';
 import { supabasePublic } from '../lib/supabase';
 import Logo from '../components/Logo';
 import { LayoutGrid, AlertCircle, Loader2, MessageCircle, Users, Search } from 'lucide-react';
+import { ImpactPointsEntry } from '../src/features/ImpactPoints';
 
 const getOrCreateClientToken = () => {
   const existing = localStorage.getItem('redoma_client_token');
@@ -84,10 +85,11 @@ const ClientStart: React.FC = () => {
   const [communityNameBySlug, setCommunityNameBySlug] = useState<Record<string, string>>({});
   const [loadingNames, setLoadingNames] = useState(false);
 
-  // --- NOVO: campo de acesso direto por ID ---
   const [directIdInput, setDirectIdInput] = useState('');
   const [directIdError, setDirectIdError] = useState<string | null>(null);
-  // ------------------------------------------
+
+  const [impactPoints, setImpactPoints] = useState<number>(0);
+  const [loadingImpactPoints, setLoadingImpactPoints] = useState(false);
 
   const requestedCommunity = (searchParams.get('community') || '').trim();
   const autoStartAttemptedRef = useRef<string | null>(null);
@@ -109,6 +111,36 @@ const ClientStart: React.FC = () => {
       communityNameBySlug[communityValue.toLowerCase()] ||
       communityValue
     );
+  };
+
+  const refreshImpactPoints = async (phoneNormalized?: string | null, fullNameValue?: string | null) => {
+    if (!phoneNormalized) {
+      setImpactPoints(0);
+      return;
+    }
+
+    try {
+      setLoadingImpactPoints(true);
+
+      const { data, error } = await supabasePublic.rpc('get_impact_points_dashboard', {
+        p_phone_normalized: phoneNormalized,
+        p_full_name: fullNameValue,
+      });
+
+      if (error) {
+        console.error('[ClientStart] impact points dashboard rpc error', error);
+        setImpactPoints(0);
+        return;
+      }
+
+      const availablePoints = data?.summary?.available_points ?? 0;
+      setImpactPoints(availablePoints);
+    } catch (err) {
+      console.error('[ClientStart] impact points unexpected error', err);
+      setImpactPoints(0);
+    } finally {
+      setLoadingImpactPoints(false);
+    }
   };
 
   const startConversationForCommunity = async (communityIdOrSlug: string) => {
@@ -207,7 +239,6 @@ const ClientStart: React.FC = () => {
     }
   };
 
-  // --- NOVO: handler do campo de acesso direto ---
   const handleDirectIdSubmit = async () => {
     const val = directIdInput.trim();
     if (!val) return;
@@ -223,7 +254,6 @@ const ClientStart: React.FC = () => {
       setCommunityError(null);
     }
   };
-  // -----------------------------------------------
 
   const handleFullNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFullName(e.target.value);
@@ -432,6 +462,37 @@ const ClientStart: React.FC = () => {
 
     fetchCommunitiesAndConversations();
   }, [step, phone]);
+
+  useEffect(() => {
+    const creditDailyAccessPoints = async () => {
+      if (step !== 'COMMUNITY') return;
+
+      const phoneNormalized = localStorage.getItem('redoma_phone');
+      const fullNameValue = localStorage.getItem('redoma_full_name');
+
+      if (!phoneNormalized) {
+        setImpactPoints(0);
+        return;
+      }
+
+      try {
+        const { error } = await supabasePublic.rpc('credit_daily_community_access_points', {
+          p_phone_normalized: phoneNormalized,
+          p_full_name: fullNameValue,
+        });
+
+        if (error) {
+          console.error('[ClientStart] daily access points rpc error', error);
+        }
+      } catch (err) {
+        console.error('[ClientStart] daily access points unexpected error', err);
+      } finally {
+        await refreshImpactPoints(phoneNormalized, fullNameValue);
+      }
+    };
+
+    creditDailyAccessPoints();
+  }, [step]);
 
   useEffect(() => {
     if (step !== 'COMMUNITY') return;
@@ -731,7 +792,6 @@ const ClientStart: React.FC = () => {
           </div>
         )}
 
-        {/* Acesso direto por ID de comunidade oculta */}
         <div className="space-y-2 pt-1">
           <div className="flex items-center gap-2 mb-1">
             <div className="flex-1 h-px bg-slate-100" />
@@ -812,7 +872,7 @@ const ClientStart: React.FC = () => {
         </div>
 
         {step === 'COMMUNITY' && (
-          <div className="px-6 py-4 border-b border-slate-50 bg-slate-50/30">
+          <div className="px-6 py-4 border-b border-slate-50 bg-slate-50/30 space-y-3">
             <button
               type="button"
               onClick={() => navigate('/client/providers')}
@@ -821,6 +881,11 @@ const ClientStart: React.FC = () => {
               <LayoutGrid size={18} className="group-hover:scale-110 transition-transform" />
               Parceiros & Cashback
             </button>
+
+            <ImpactPointsEntry
+              points={loadingImpactPoints ? 0 : impactPoints}
+              onClick={() => navigate('/client/impact-points')}
+            />
           </div>
         )}
 

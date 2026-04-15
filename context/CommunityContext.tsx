@@ -4,7 +4,9 @@ import { supabaseMaster } from '../lib/supabase';
 
 interface CommunityContextType {
   communities: Community[];
-  addCommunity: (c: Omit<Community, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addCommunity: (
+    c: Omit<Community, 'id' | 'createdAt' | 'updatedAt'>
+  ) => Promise<Community | null>;
   updateCommunity: (id: string, c: Partial<Community>) => Promise<void>;
   deleteCommunity: (id: string) => Promise<void>;
   toggleActive: (id: string) => Promise<void>;
@@ -19,6 +21,7 @@ const SEED_COMMUNITIES: Omit<Community, 'id' | 'createdAt' | 'updatedAt'>[] = [
     slug: 'unidos-somos-fortes',
     description: 'Comunidade de apoio social e renda colaborativa.',
     logo_url: null,
+    instagram_url: null,
     isActive: true,
   },
   {
@@ -26,6 +29,7 @@ const SEED_COMMUNITIES: Omit<Community, 'id' | 'createdAt' | 'updatedAt'>[] = [
     slug: 'instituto-luz',
     description: 'Projetos educacionais e impacto social.',
     logo_url: null,
+    instagram_url: null,
     isActive: true,
   },
   {
@@ -33,6 +37,7 @@ const SEED_COMMUNITIES: Omit<Community, 'id' | 'createdAt' | 'updatedAt'>[] = [
     slug: 'condominio-parque-verde',
     description: 'Fundo coletivo para melhorias do condomínio.',
     logo_url: null,
+    instagram_url: null,
     isActive: true,
   },
   {
@@ -40,6 +45,7 @@ const SEED_COMMUNITIES: Omit<Community, 'id' | 'createdAt' | 'updatedAt'>[] = [
     slug: 'igreja-vida-nova',
     description: 'Ações sociais e projetos comunitários.',
     logo_url: null,
+    instagram_url: null,
     isActive: true,
   },
   {
@@ -47,6 +53,7 @@ const SEED_COMMUNITIES: Omit<Community, 'id' | 'createdAt' | 'updatedAt'>[] = [
     slug: 'atletas-do-bem',
     description: 'Esporte como ferramenta de transformação.',
     logo_url: null,
+    instagram_url: null,
     isActive: true,
   },
 ];
@@ -70,7 +77,6 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return;
       }
 
-      // Seed apenas em desenvolvimento — evita recriar dados se alguém apagar tudo em produção
       if ((import.meta as any).env?.PROD) {
         console.warn('[CommunityContext] tabela vazia em produção — seed bloqueado');
         return;
@@ -103,19 +109,24 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     fetchCommunities();
 
-    // Realtime: qualquer mudança em communities -> refetch
     subscription = supabaseMaster
       .channel('communities_channel')
-      .on('postgres_changes' as any, { event: '*', schema: 'public', table: 'communities' }, async () => {
-        const { data, error } = await supabaseMaster.from('communities').select('*');
-        if (!error && data) setCommunities(data as Community[]);
-      })
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'communities' },
+        async () => {
+          const { data, error } = await supabaseMaster.from('communities').select('*');
+          if (!error && data) setCommunities(data as Community[]);
+        }
+      )
       .subscribe();
 
     return () => subscription?.unsubscribe?.();
   }, []);
 
-  const addCommunity = async (c: Omit<Community, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addCommunity = async (
+    c: Omit<Community, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<Community | null> => {
     const newC: Community = {
       ...c,
       id:
@@ -128,8 +139,18 @@ export const CommunityProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       updatedAt: new Date().toISOString(),
     };
 
-    const { error } = await supabaseMaster.from('communities').insert([newC]);
-    if (error) console.error('[CommunityContext addCommunity]', error);
+    const { data, error } = await supabaseMaster
+      .from('communities')
+      .insert([newC])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('[CommunityContext addCommunity]', error);
+      return null;
+    }
+
+    return data as Community;
   };
 
   const updateCommunity = async (id: string, c: Partial<Community>) => {
