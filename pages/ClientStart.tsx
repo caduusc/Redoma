@@ -113,7 +113,10 @@ const ClientStart: React.FC = () => {
     );
   };
 
-  const refreshImpactPoints = async (phoneNormalized?: string | null, fullNameValue?: string | null) => {
+  const refreshImpactPoints = async (
+    phoneNormalized?: string | null,
+    fullNameValue?: string | null
+  ) => {
     if (!phoneNormalized) {
       setImpactPoints(0);
       return;
@@ -140,6 +143,33 @@ const ClientStart: React.FC = () => {
       setImpactPoints(0);
     } finally {
       setLoadingImpactPoints(false);
+    }
+  };
+
+  const saveUserReferral = async (
+    phoneNormalized: string,
+    fullNameValue: string,
+    firstCommunityId?: string | null
+  ) => {
+    const refCode = localStorage.getItem('redoma_ref_code');
+    const clientToken = localStorage.getItem('redoma_client_token');
+
+    if (!refCode) return;
+
+    try {
+      const { error } = await supabasePublic.rpc('save_user_referral', {
+        p_phone_normalized: phoneNormalized,
+        p_ref_code: refCode,
+        p_full_name: fullNameValue,
+        p_first_community_id: firstCommunityId ?? null,
+        p_client_token: clientToken,
+      });
+
+      if (error) {
+        console.error('[ClientStart] save_user_referral rpc error', error);
+      }
+    } catch (err) {
+      console.error('[ClientStart] save_user_referral unexpected error', err);
     }
   };
 
@@ -174,6 +204,8 @@ const ClientStart: React.FC = () => {
       }
 
       const resolvedCommunityId = comm.id;
+
+      await saveUserReferral(phoneNorm, rawName, resolvedCommunityId);
 
       const existingActive = activeConversations.find(
         (c) => c.community_id === resolvedCommunityId
@@ -248,8 +280,7 @@ const ClientStart: React.FC = () => {
 
     if (!success) {
       setDirectIdError(
-        communityError ||
-          'ID não encontrado. Verifique com a liderança da comunidade.'
+        communityError || 'ID não encontrado. Verifique com a liderança da comunidade.'
       );
       setCommunityError(null);
     }
@@ -265,7 +296,7 @@ const ClientStart: React.FC = () => {
     if (phoneError) setPhoneError(null);
   };
 
-  const handleSubmitIdentity = (e: React.FormEvent) => {
+  const handleSubmitIdentity = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const rawName = fullName.trim();
@@ -289,8 +320,18 @@ const ClientStart: React.FC = () => {
     localStorage.setItem('redoma_phone', phoneNorm);
     setPhone(phoneNorm);
 
+    await saveUserReferral(phoneNorm, rawName, null);
+
     setStep('COMMUNITY');
   };
+
+  useEffect(() => {
+    const refCode = (searchParams.get('ref') || '').trim();
+
+    if (!refCode) return;
+
+    localStorage.setItem('redoma_ref_code', refCode);
+  }, [searchParams]);
 
   useEffect(() => {
     const fetchCommunityNames = async () => {
@@ -760,9 +801,7 @@ const ClientStart: React.FC = () => {
 
         {communitiesUsed.length > 0 && (
           <div className="space-y-3">
-            <p className="text-sm text-slate-500">
-              Comunidades apoiadas recentemente:
-            </p>
+            <p className="text-sm text-slate-500">Comunidades apoiadas recentemente:</p>
 
             {loadingCommunities ? (
               <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -771,9 +810,7 @@ const ClientStart: React.FC = () => {
               </div>
             ) : (
               <>
-                <p className="text-[11px] text-slate-500">
-                  Apoie novamente
-                </p>
+                <p className="text-[11px] text-slate-500">Apoie novamente</p>
                 <div className="flex flex-wrap gap-2">
                   {communitiesUsed.map((cid) => (
                     <button
@@ -801,9 +838,7 @@ const ClientStart: React.FC = () => {
             <div className="flex-1 h-px bg-slate-100" />
           </div>
 
-          <p className="text-[11px] text-slate-400">
-            Acesse diretamente pelo ID da comunidade:
-          </p>
+          <p className="text-[11px] text-slate-400">Acesse diretamente pelo ID da comunidade:</p>
 
           <div className="flex gap-2">
             <input
@@ -850,9 +885,7 @@ const ClientStart: React.FC = () => {
         >
           Trocar dados
         </button>
-        <p className="text-[10px] text-slate-400">
-          Você está conectado ao ecossistema Redoma.
-        </p>
+        <p className="text-[10px] text-slate-400">Você está conectado ao ecossistema Redoma.</p>
       </div>
     </div>
   );
