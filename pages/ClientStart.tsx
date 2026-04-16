@@ -326,12 +326,20 @@ const ClientStart: React.FC = () => {
   };
 
   useEffect(() => {
-    const refCode = (searchParams.get('ref') || '').trim();
+  const browserParams = new URLSearchParams(window.location.search);
+  const refFromBrowserUrl = (browserParams.get('ref') || '').trim();
+  const refFromRouter = (searchParams.get('ref') || '').trim();
 
-    if (!refCode) return;
+  const refCode = refFromBrowserUrl || refFromRouter;
 
-    localStorage.setItem('redoma_ref_code', refCode);
-  }, [searchParams]);
+  console.log('[ClientStart] refFromBrowserUrl:', refFromBrowserUrl);
+  console.log('[ClientStart] refFromRouter:', refFromRouter);
+  console.log('[ClientStart] final refCode:', refCode);
+
+  if (!refCode) return;
+
+  localStorage.setItem('redoma_ref_code', refCode);
+}, [searchParams]);
 
   useEffect(() => {
     const fetchCommunityNames = async () => {
