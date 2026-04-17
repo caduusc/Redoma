@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { supabasePublic } from '../lib/supabase';
 import Logo from '../components/Logo';
-import { LayoutGrid, AlertCircle, Loader2, MessageCircle, Users, Search, AlertTriangle } from 'lucide-react';
+import { LayoutGrid, AlertCircle, Loader2, MessageCircle, Users, Search } from 'lucide-react';
 import { ImpactPointsEntry } from '../src/features/ImpactPoints';
 
 const getOrCreateClientToken = () => {
@@ -44,21 +44,6 @@ type CommunityRowMinimal = {
   slug?: string | null;
   isActive: boolean;
 };
-
-// ⚠️ Banner de instabilidade — remover quando o problema for resolvido
-const InstabilityBanner: React.FC = () => (
-  <div className="w-full bg-amber-400 text-amber-900 px-4 py-3 flex items-start gap-3 shadow-lg">
-    <AlertTriangle size={18} className="shrink-0 mt-0.5 animate-pulse" />
-    <div>
-      <p className="text-xs font-extrabold uppercase tracking-widest leading-tight">
-        Instabilidade temporária no sistema
-      </p>
-      <p className="text-[11px] font-medium mt-0.5 leading-snug">
-        Estamos cientes do problema e trabalhando para normalizar. Pedimos desculpas pelo transtorno — tente novamente em alguns minutos.
-      </p>
-    </div>
-  </div>
-);
 
 const ClientStart: React.FC = () => {
   const navigate = useNavigate();
@@ -341,20 +326,20 @@ const ClientStart: React.FC = () => {
   };
 
   useEffect(() => {
-    const browserParams = new URLSearchParams(window.location.search);
-    const refFromBrowserUrl = (browserParams.get('ref') || '').trim();
-    const refFromRouter = (searchParams.get('ref') || '').trim();
+  const browserParams = new URLSearchParams(window.location.search);
+  const refFromBrowserUrl = (browserParams.get('ref') || '').trim();
+  const refFromRouter = (searchParams.get('ref') || '').trim();
 
-    const refCode = refFromBrowserUrl || refFromRouter;
+  const refCode = refFromBrowserUrl || refFromRouter;
 
-    console.log('[ClientStart] refFromBrowserUrl:', refFromBrowserUrl);
-    console.log('[ClientStart] refFromRouter:', refFromRouter);
-    console.log('[ClientStart] final refCode:', refCode);
+  console.log('[ClientStart] refFromBrowserUrl:', refFromBrowserUrl);
+  console.log('[ClientStart] refFromRouter:', refFromRouter);
+  console.log('[ClientStart] final refCode:', refCode);
 
-    if (!refCode) return;
+  if (!refCode) return;
 
-    localStorage.setItem('redoma_ref_code', refCode);
-  }, [searchParams]);
+  localStorage.setItem('redoma_ref_code', refCode);
+}, [searchParams]);
 
   useEffect(() => {
     const fetchCommunityNames = async () => {
@@ -917,11 +902,6 @@ const ClientStart: React.FC = () => {
     <div className="min-h-screen bg-redoma-light px-4 py-8 relative overflow-x-hidden">
       <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
-
-      {/* ⚠️ BANNER DE INSTABILIDADE — remover após normalização */}
-      <div className="w-full max-w-md mx-auto mb-3 relative z-10">
-        <InstabilityBanner />
-      </div>
 
       <div className="w-full max-w-md mx-auto bg-white rounded-[2rem] shadow-2xl shadow-redoma-dark/5 overflow-hidden relative z-10 border border-slate-100">
         <div className="p-6 bg-redoma-dark text-white text-center">
