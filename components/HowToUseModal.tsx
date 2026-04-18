@@ -14,7 +14,7 @@ const HowToUseModal: React.FC<HowToUseModalProps> = ({ open, onClose }) => {
       {
         title: 'Encontre o produto na loja de sua preferência',
         description:
-          'Antes de usar a Redoma, procure normalmente o produto desejado no site da loja parceira. A área Parceiros & Cashback serve para mostrar quais lojas fazem parte da plataforma.',
+          'Antes de usar a Redoma, procure o produto desejado no site da loja parceira. A área Parceiros & Cashback serve para mostrar quais lojas são parceiras da plataforma.',
         image: '/tutorial/tutorial-1.PNG',
       },
       {
