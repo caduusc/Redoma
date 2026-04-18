@@ -4,15 +4,7 @@ import { useChat } from '../context/ChatContext';
 import { supabasePublic } from '../lib/supabase';
 import Logo from '../components/Logo';
 import HowToUseModal from '../components/HowToUseModal';
-import {
-  LayoutGrid,
-  AlertCircle,
-  Loader2,
-  MessageCircle,
-  Users,
-  Search,
-  CircleHelp,
-} from 'lucide-react';
+import { LayoutGrid, AlertCircle, Loader2, MessageCircle, Users, Search } from 'lucide-react';
 import { ImpactPointsEntry } from '../src/features/ImpactPoints';
 
 const getOrCreateClientToken = () => {
@@ -822,17 +814,6 @@ const ClientStart: React.FC = () => {
             points={loadingImpactPoints ? 0 : impactPoints}
             onClick={() => navigate('/client/impact-points')}
           />
-
-          <button
-            type="button"
-            onClick={() => setHowToUseOpen(true)}
-            className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
-          >
-            <CircleHelp size={18} className="group-hover:scale-110 transition-transform" />
-            Como usar
-          </button>
-
-          {loadingNames ? <p className="text-[11px] text-slate-400">Carregando catálogo...</p> : null}
         </div>
 
         <div className="space-y-3">
@@ -848,7 +829,17 @@ const ClientStart: React.FC = () => {
 
         {communitiesUsed.length > 0 && (
           <div className="space-y-3">
-            <p className="text-sm text-slate-500">Comunidades apoiadas recentemente:</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-slate-500">Comunidades apoiadas recentemente:</p>
+
+              <button
+                type="button"
+                onClick={() => setHowToUseOpen(true)}
+                className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-amber-700 hover:text-amber-800 transition whitespace-nowrap"
+              >
+                Como usar
+              </button>
+            </div>
 
             {loadingCommunities ? (
               <div className="flex items-center gap-2 text-xs text-slate-500">
