@@ -15,25 +15,25 @@ const HowToUseModal: React.FC<HowToUseModalProps> = ({ open, onClose }) => {
         title: 'Encontre o produto na loja de sua preferência',
         description:
           'Antes de usar a Redoma, procure normalmente o produto desejado no site da loja parceira. A área Parceiros & Cashback serve para mostrar quais lojas fazem parte da plataforma.',
-        image: '/tutorial/tutorial-1.png',
+        image: '/tutorial/tutorial-1.PNG',
       },
       {
         title: 'Escolha quem você deseja apoiar',
         description:
           'Depois de decidir o produto que quer comprar, clique em Escolha a comunidade que deseja apoiar para selecionar a causa que vai receber o impacto da sua compra.',
-        image: '/tutorial/tutorial-2.png',
+        image: '/tutorial/tutorial-2.PNG',
       },
       {
         title: 'Inicie o apoio à comunidade',
         description:
           'Ao entrar na página da comunidade, clique em Apoiar para abrir o atendimento e seguir com o processo pelo chat da Redoma.',
-        image: '/tutorial/tutorial-3.png',
+        image: '/tutorial/tutorial-3.PNG',
       },
       {
         title: 'Envie o link do produto desejado',
         description:
           'No chat, compartilhe o link do produto que você deseja comprar. A equipe da Redoma irá validar o item e gerar o link correto para viabilizar o apoio à comunidade escolhida.',
-        image: '/tutorial/tutorial-4.png',
+        image: '/tutorial/tutorial-4.PNG',
       },
       {
         title: 'Conclua sua compra pelo link gerado',
@@ -41,7 +41,7 @@ const HowToUseModal: React.FC<HowToUseModalProps> = ({ open, onClose }) => {
           'Com o novo link enviado pelo suporte, você pode seguir sua compra normalmente e garantir que ela gere impacto para a comunidade selecionada.',
         disclaimer:
           'O valor do produto permanece o mesmo para você. A compra continua sendo realizada na mesma loja, com o mesmo vendedor e a mesma entrega.',
-        image: '/tutorial/tutorial-5.png',
+        image: '/tutorial/tutorial-5.PNG',
       },
     ],
     []
