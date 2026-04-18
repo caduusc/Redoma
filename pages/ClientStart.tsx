@@ -728,7 +728,7 @@ const ClientStart: React.FC = () => {
         <button
           type="button"
           onClick={() => setHowToUseOpen(true)}
-          className="shrink-0 rounded-xl bg-blue-600 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-white hover:bg-blue-700 transition shadow-sm"
+          className="shrink-0 rounded-xl border border-blue-600 bg-transparent px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-700 transition"
         >
           Como usar
         </button>
