@@ -728,7 +728,7 @@ const ClientStart: React.FC = () => {
         <button
           type="button"
           onClick={() => setHowToUseOpen(true)}
-          className="shrink-0 rounded-xl border border-redoma-dark bg-transparent px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-redoma-dark hover:bg-redoma-dark/5 hover:text-redoma-dark transition"
+          className="shrink-0 rounded-xl border border-redoma-dark bg-transparent px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-redoma-dark hover:bg-redoma-dark/5 hover:text-redoma-dark transition"
         >
           Como usar
         </button>
@@ -814,7 +814,7 @@ const ClientStart: React.FC = () => {
           <button
             type="button"
             onClick={() => navigate('/client/providers')}
-            className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
+            className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 py-3 px-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
           >
             <LayoutGrid size={18} className="group-hover:scale-110 transition-transform" />
             Parceiros & Cashback
