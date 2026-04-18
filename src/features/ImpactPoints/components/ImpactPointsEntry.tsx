@@ -59,21 +59,24 @@ export const ImpactPointsEntry: React.FC<ImpactPointsEntryProps> = ({ points, on
                 type="button"
                 aria-label="O que é Impact Points?"
                 onClick={handleInfoClick}
-                className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-slate-200 bg-slate-50 text-slate-500 hover:text-redoma-dark hover:border-redoma-steel/40 transition shrink-0"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-full border border-slate-200 bg-slate-50 text-slate-500 hover:text-redoma-dark hover:border-redoma-steel/40 transition shrink-0"
               >
-                <CircleHelp size={15} />
+                <CircleHelp size={16} />
               </button>
 
               <div
-                className={`absolute z-30 top-9 left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 w-[260px] sm:w-[300px] max-w-[calc(100vw-48px)] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl text-xs leading-relaxed text-slate-600 normal-case tracking-normal font-medium transition-all ${
+                className={`absolute z-30 top-10 left-1/2 -translate-x-1/2 w-[280px] sm:w-[320px] max-w-[calc(100vw-32px)] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl text-xs leading-relaxed text-slate-600 font-medium transition-all ${
                   tooltipOpen
                     ? 'opacity-100 visible translate-y-0'
                     : 'opacity-0 invisible -translate-y-1'
                 }`}
                 onClick={(e) => e.stopPropagation()}
               >
-                Impact Points são pontos que você acumula ao interagir com a Redoma e apoiar
-                comunidades. Esses pontos poderão ser trocados por benefícios na Redoma Store.
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 bg-white border-l border-t border-slate-200" />
+                <div className="relative">
+                  Impact Points são pontos que você acumula ao interagir com a Redoma e apoiar
+                  comunidades. Esses pontos poderão ser trocados por benefícios na Redoma Store.
+                </div>
               </div>
             </div>
           </div>
