@@ -34,12 +34,12 @@ export const ImpactPointsEntry: React.FC<ImpactPointsEntryProps> = ({ points, on
       onClick={onClick}
       className="w-full bg-white border border-slate-100 rounded-2xl p-4 flex items-center justify-between shadow-sm hover:shadow-md hover:border-redoma-steel/30 transition-all group"
     >
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className="w-10 h-10 rounded-xl bg-redoma-dark flex items-center justify-center text-redoma-star shadow-inner shrink-0">
           <Star size={20} fill="currentColor" />
         </div>
 
-        <div className="text-left min-w-0">
+        <div className="text-left min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
               Seu Impacto
@@ -49,26 +49,31 @@ export const ImpactPointsEntry: React.FC<ImpactPointsEntryProps> = ({ points, on
               Beta
             </span>
 
-            <div ref={tooltipRef} className="relative flex items-center">
+            <div
+              ref={tooltipRef}
+              className="relative flex items-center"
+              onMouseEnter={() => setTooltipOpen(true)}
+              onMouseLeave={() => setTooltipOpen(false)}
+            >
               <button
                 type="button"
                 aria-label="O que é Impact Points?"
                 onClick={handleInfoClick}
-                onMouseEnter={() => setTooltipOpen(true)}
-                onMouseLeave={() => setTooltipOpen(false)}
-                className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-slate-200 bg-slate-50 text-slate-500 hover:text-redoma-dark hover:border-redoma-steel/40 transition"
+                className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-slate-200 bg-slate-50 text-slate-500 hover:text-redoma-dark hover:border-redoma-steel/40 transition shrink-0"
               >
-                <CircleHelp size={12} />
+                <CircleHelp size={15} />
               </button>
 
               <div
-                className={`absolute left-0 top-7 z-20 w-64 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl text-[11px] leading-relaxed text-slate-600 normal-case tracking-normal font-medium transition-all ${
+                className={`absolute z-30 top-9 left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 w-[260px] sm:w-[300px] max-w-[calc(100vw-48px)] rounded-2xl border border-slate-200 bg-white p-4 shadow-xl text-xs leading-relaxed text-slate-600 normal-case tracking-normal font-medium transition-all ${
                   tooltipOpen
                     ? 'opacity-100 visible translate-y-0'
                     : 'opacity-0 invisible -translate-y-1'
                 }`}
+                onClick={(e) => e.stopPropagation()}
               >
-                Impact Points são pontos que você acumula ao interagir com a Redoma e apoiar comunidades. Eles poderão ser trocados por benefícios na Redoma Store.
+                Impact Points são pontos que você acumula ao interagir com a Redoma e apoiar
+                comunidades. Esses pontos poderão ser trocados por benefícios na Redoma Store.
               </div>
             </div>
           </div>
