@@ -32,8 +32,7 @@ const normalizeFullName = (name: string) =>
     .replace(/\s+/g, ' ')
     .toLowerCase();
 
-const normalizePhone = (phone: string) =>
-  phone.replace(/\D/g, '').replace(/^55/, '');
+const normalizePhone = (phone: string) => phone.replace(/\D/g, '').replace(/^55/, '');
 
 type Step = 'IDENTITY' | 'COMMUNITY';
 
@@ -832,6 +831,8 @@ const ClientStart: React.FC = () => {
             <CircleHelp size={18} className="group-hover:scale-110 transition-transform" />
             Como usar
           </button>
+
+          {loadingNames ? <p className="text-[11px] text-slate-400">Carregando catálogo...</p> : null}
         </div>
 
         <div className="space-y-3">
@@ -843,8 +844,6 @@ const ClientStart: React.FC = () => {
             <Users size={18} className="group-hover:scale-110 transition-transform" />
             Escolha a comunidade que deseja apoiar
           </button>
-
-          {loadingNames ? <p className="text-[11px] text-slate-400">Carregando catálogo...</p> : null}
         </div>
 
         {communitiesUsed.length > 0 && (
