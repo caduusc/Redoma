@@ -6,27 +6,44 @@ interface HowToUseModalProps {
   onClose: () => void;
 }
 
+type TutorialStep = {
+  title: string;
+  description: React.ReactNode;
+  image: string;
+  disclaimer?: string;
+};
+
 const HowToUseModal: React.FC<HowToUseModalProps> = ({ open, onClose }) => {
   const [currentStep, setCurrentStep] = useState(0);
 
-  const steps = useMemo(
+  const steps = useMemo<TutorialStep[]>(
     () => [
       {
         title: 'Encontre o produto na loja de sua preferência',
-        description:
-          'Antes de usar a Redoma, procure o produto desejado no site da loja parceira. A área Parceiros & Cashback serve para mostrar quais lojas são parceiras da plataforma.',
+        description:(
+          <>
+           Antes de usar a Redoma, procure o produto desejado no site da loja parceira. A área <strong>"Parceiros & Cashback"</strong> serve para mostrar quais lojas são parceiras da plataforma.
+          </>
+        ),
         image: '/tutorial/tutorial-1.PNG',
       },
       {
         title: 'Escolha quem você deseja apoiar',
-        description:
-          'Depois de decidir o produto que quer comprar, clique em Escolha a comunidade que deseja apoiar para selecionar a causa que vai receber o impacto da sua compra.',
+        description:(
+          <>
+           Depois de decidir o produto que quer comprar, clique em <strong>"Escolha a comunidade que deseja apoiar"</strong> para selecionar a causa que vai receber o impacto da sua compra.
+          </>
+        ),
         image: '/tutorial/tutorial-2.PNG',
       },
       {
         title: 'Inicie o apoio à comunidade',
-        description:
-          'Ao entrar na página da comunidade, clique em Apoiar para abrir o atendimento e seguir com o processo pelo chat da Redoma.',
+        description: (
+          <>
+            Ao entrar na página da comunidade, clique em <strong>"Apoiar"</strong> para abrir o
+            atendimento e seguir com o processo pelo chat da Redoma.
+          </>
+        ),
         image: '/tutorial/tutorial-3.PNG',
       },
       {
@@ -37,8 +54,11 @@ const HowToUseModal: React.FC<HowToUseModalProps> = ({ open, onClose }) => {
       },
       {
         title: 'Conclua sua compra pelo link gerado',
-        description:
-          'Com o novo link enviado pelo suporte, você pode seguir sua compra normalmente e garantir que ela gere impacto para a comunidade selecionada.',
+        description:(
+          <>
+            Com o <strong>novo link</strong> enviado pelo suporte, você pode seguir sua compra normalmente e garantir que ela gere <strong>impacto</strong> para a comunidade selecionada.
+          </>
+        ),
         disclaimer:
           'O valor do produto permanece o mesmo para você. A compra continua sendo realizada na mesma loja, com o mesmo vendedor e a mesma entrega.',
         image: '/tutorial/tutorial-5.PNG',
@@ -103,7 +123,7 @@ const HowToUseModal: React.FC<HowToUseModalProps> = ({ open, onClose }) => {
             <h3 className="text-base font-bold text-slate-800">{step.title}</h3>
             <p className="text-sm text-slate-500 mt-2 leading-relaxed">{step.description}</p>
 
-            {'disclaimer' in step && step.disclaimer ? (
+            {step.disclaimer ? (
               <div className="mt-3 rounded-2xl bg-slate-50 border border-slate-200 p-3">
                 <p className="text-xs text-slate-600 leading-relaxed">{step.disclaimer}</p>
               </div>
