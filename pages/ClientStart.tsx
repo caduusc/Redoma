@@ -3,7 +3,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useChat } from '../context/ChatContext';
 import { supabasePublic } from '../lib/supabase';
 import Logo from '../components/Logo';
-import { LayoutGrid, AlertCircle, Loader2, MessageCircle, Users, Search } from 'lucide-react';
+import HowToUseModal from '../components/HowToUseModal';
+import {
+  LayoutGrid,
+  AlertCircle,
+  Loader2,
+  MessageCircle,
+  Users,
+  Search,
+  CircleHelp,
+} from 'lucide-react';
 import { ImpactPointsEntry } from '../src/features/ImpactPoints';
 
 const getOrCreateClientToken = () => {
@@ -24,9 +33,7 @@ const normalizeFullName = (name: string) =>
     .toLowerCase();
 
 const normalizePhone = (phone: string) =>
-  phone
-    .replace(/\D/g, '')
-    .replace(/^55/, '');
+  phone.replace(/\D/g, '').replace(/^55/, '');
 
 type Step = 'IDENTITY' | 'COMMUNITY';
 
@@ -68,10 +75,7 @@ const ClientStart: React.FC = () => {
   const [fullNameError, setFullNameError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
-  const firstName = useMemo(
-    () => fullName.trim().split(' ')[0] || 'amigo',
-    [fullName]
-  );
+  const firstName = useMemo(() => fullName.trim().split(' ')[0] || 'amigo', [fullName]);
 
   const [communityError, setCommunityError] = useState<string | null>(null);
   const [loadingCommunities, setLoadingCommunities] = useState(false);
@@ -90,6 +94,8 @@ const ClientStart: React.FC = () => {
 
   const [impactPoints, setImpactPoints] = useState<number>(0);
   const [loadingImpactPoints, setLoadingImpactPoints] = useState(false);
+
+  const [howToUseOpen, setHowToUseOpen] = useState(false);
 
   const requestedCommunity = (searchParams.get('community') || '').trim();
   const autoStartAttemptedRef = useRef<string | null>(null);
@@ -111,6 +117,11 @@ const ClientStart: React.FC = () => {
       communityNameBySlug[communityValue.toLowerCase()] ||
       communityValue
     );
+  };
+
+  const handleCloseHowToUse = () => {
+    localStorage.setItem('redoma_how_to_use_seen', 'true');
+    setHowToUseOpen(false);
   };
 
   const refreshImpactPoints = async (
@@ -326,20 +337,26 @@ const ClientStart: React.FC = () => {
   };
 
   useEffect(() => {
-  const browserParams = new URLSearchParams(window.location.search);
-  const refFromBrowserUrl = (browserParams.get('ref') || '').trim();
-  const refFromRouter = (searchParams.get('ref') || '').trim();
+    const browserParams = new URLSearchParams(window.location.search);
+    const refFromBrowserUrl = (browserParams.get('ref') || '').trim().toLowerCase();
+    const refFromRouter = (searchParams.get('ref') || '').trim().toLowerCase();
 
-  const refCode = refFromBrowserUrl || refFromRouter;
+    const refCode = refFromBrowserUrl || refFromRouter;
 
-  console.log('[ClientStart] refFromBrowserUrl:', refFromBrowserUrl);
-  console.log('[ClientStart] refFromRouter:', refFromRouter);
-  console.log('[ClientStart] final refCode:', refCode);
+    if (!refCode) return;
 
-  if (!refCode) return;
+    localStorage.setItem('redoma_ref_code', refCode);
+  }, [searchParams]);
 
-  localStorage.setItem('redoma_ref_code', refCode);
-}, [searchParams]);
+  useEffect(() => {
+    if (step !== 'COMMUNITY') return;
+
+    const hasSeenTutorial = localStorage.getItem('redoma_how_to_use_seen');
+
+    if (!hasSeenTutorial) {
+      setHowToUseOpen(true);
+    }
+  }, [step]);
 
   useEffect(() => {
     const fetchCommunityNames = async () => {
@@ -795,6 +812,31 @@ const ClientStart: React.FC = () => {
         <div className="space-y-3">
           <button
             type="button"
+            onClick={() => navigate('/client/providers')}
+            className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
+          >
+            <LayoutGrid size={18} className="group-hover:scale-110 transition-transform" />
+            Parceiros & Cashback
+          </button>
+
+          <ImpactPointsEntry
+            points={loadingImpactPoints ? 0 : impactPoints}
+            onClick={() => navigate('/client/impact-points')}
+          />
+
+          <button
+            type="button"
+            onClick={() => setHowToUseOpen(true)}
+            className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
+          >
+            <CircleHelp size={18} className="group-hover:scale-110 transition-transform" />
+            Como usar
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <button
+            type="button"
             onClick={() => navigate('/client/communities')}
             className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
           >
@@ -802,9 +844,7 @@ const ClientStart: React.FC = () => {
             Escolha a comunidade que deseja apoiar
           </button>
 
-          {loadingNames ? (
-            <p className="text-[11px] text-slate-400">Carregando catálogo...</p>
-          ) : null}
+          {loadingNames ? <p className="text-[11px] text-slate-400">Carregando catálogo...</p> : null}
         </div>
 
         {communitiesUsed.length > 0 && (
@@ -899,58 +939,44 @@ const ClientStart: React.FC = () => {
   );
 
   return (
-    <div className="min-h-screen bg-redoma-light px-4 py-8 relative overflow-x-hidden">
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
+    <>
+      <div className="min-h-screen bg-redoma-light px-4 py-8 relative overflow-x-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-redoma-steel/5 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="w-full max-w-md mx-auto bg-white rounded-[2rem] shadow-2xl shadow-redoma-dark/5 overflow-hidden relative z-10 border border-slate-100">
-        <div className="p-6 bg-redoma-dark text-white text-center">
-          <Logo size={60} className="mb-4 drop-shadow-xl" />
-          <h1 className="text-3xl font-bold tracking-tight">Redoma Tech</h1>
-          <p className="text-redoma-glow text-sm mt-3 font-medium">
-            Crescimento Inteligente para comunidades
-          </p>
+        <div className="w-full max-w-md mx-auto bg-white rounded-[2rem] shadow-2xl shadow-redoma-dark/5 overflow-hidden relative z-10 border border-slate-100">
+          <div className="p-6 bg-redoma-dark text-white text-center">
+            <Logo size={60} className="mb-4 drop-shadow-xl" />
+            <h1 className="text-3xl font-bold tracking-tight">Redoma Tech</h1>
+            <p className="text-redoma-glow text-sm mt-3 font-medium">
+              Crescimento Inteligente para comunidades
+            </p>
+          </div>
+
+          {step === 'IDENTITY' ? renderIdentityStep() : renderCommunityStep()}
         </div>
 
-        {step === 'COMMUNITY' && (
-          <div className="px-6 py-4 border-b border-slate-50 bg-slate-50/30 space-y-3">
-            <button
-              type="button"
-              onClick={() => navigate('/client/providers')}
-              className="w-full flex items-center justify-center gap-3 bg-white text-redoma-dark border-2 border-redoma-dark/10 p-4 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-redoma-dark hover:text-white transition-all group"
-            >
-              <LayoutGrid size={18} className="group-hover:scale-110 transition-transform" />
-              Parceiros & Cashback
-            </button>
-
-            <ImpactPointsEntry
-              points={loadingImpactPoints ? 0 : impactPoints}
-              onClick={() => navigate('/client/impact-points')}
-            />
-          </div>
-        )}
-
-        {step === 'IDENTITY' ? renderIdentityStep() : renderCommunityStep()}
+        <div className="mt-6 flex gap-6 justify-center relative z-10 pb-4">
+          <button
+            type="button"
+            onClick={() => navigate('/agent/login')}
+            className="text-redoma-steel font-bold hover:text-redoma-dark transition-colors text-[10px] uppercase tracking-widest px-1 py-2"
+          >
+            Acesso Suporte
+          </button>
+          <div className="w-px h-3 bg-slate-300 mt-0.5" />
+          <button
+            type="button"
+            onClick={() => navigate('/admin/login')}
+            className="text-redoma-steel font-bold hover:text-redoma-dark transition-colors text-[10px] uppercase tracking-widest px-1 py-2"
+          >
+            Gestão Master
+          </button>
+        </div>
       </div>
 
-      <div className="mt-6 flex gap-6 justify-center relative z-10 pb-4">
-        <button
-          type="button"
-          onClick={() => navigate('/agent/login')}
-          className="text-redoma-steel font-bold hover:text-redoma-dark transition-colors text-[10px] uppercase tracking-widest px-1 py-2"
-        >
-          Acesso Suporte
-        </button>
-        <div className="w-px h-3 bg-slate-300 mt-0.5" />
-        <button
-          type="button"
-          onClick={() => navigate('/admin/login')}
-          className="text-redoma-steel font-bold hover:text-redoma-dark transition-colors text-[10px] uppercase tracking-widest px-1 py-2"
-        >
-          Gestão Master
-        </button>
-      </div>
-    </div>
+      <HowToUseModal open={howToUseOpen} onClose={handleCloseHowToUse} />
+    </>
   );
 };
 
