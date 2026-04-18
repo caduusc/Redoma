@@ -715,13 +715,23 @@ const ClientStart: React.FC = () => {
 
   const renderCommunityStep = () => (
     <div className="p-6 space-y-5 pt-4">
-      <div>
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-          Bem-vindo de volta
-        </p>
-        <h2 className="text-xl font-semibold text-slate-900 mt-1">
-          Olá, <span className="text-redoma-steel">{firstName}</span>!
-        </h2>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Bem-vindo de volta
+          </p>
+          <h2 className="text-xl font-semibold text-slate-900 mt-1">
+            Olá, <span className="text-redoma-steel">{firstName}</span>!
+          </h2>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setHowToUseOpen(true)}
+          className="shrink-0 rounded-xl bg-blue-600 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.18em] text-white hover:bg-blue-700 transition shadow-sm"
+        >
+          Como usar
+        </button>
       </div>
 
       {communityError && (
@@ -829,17 +839,7 @@ const ClientStart: React.FC = () => {
 
         {communitiesUsed.length > 0 && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-slate-500">Comunidades apoiadas recentemente:</p>
-
-              <button
-                type="button"
-                onClick={() => setHowToUseOpen(true)}
-                className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-amber-700 hover:text-amber-800 transition whitespace-nowrap"
-              >
-                Como usar
-              </button>
-            </div>
+            <p className="text-sm text-slate-500">Comunidades apoiadas recentemente:</p>
 
             {loadingCommunities ? (
               <div className="flex items-center gap-2 text-xs text-slate-500">
