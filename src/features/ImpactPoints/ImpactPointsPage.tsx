@@ -7,6 +7,7 @@ import { PointsBalanceCard } from './components/PointsBalanceCard';
 import { PointsHistoryItem } from './components/PointsHistoryItem';
 import { PointsEmptyState } from './components/PointsEmptyState';
 import { RewardsComingSoonCard } from './components/RewardsComingSoonCard';
+import { PointsEarningRulesCard } from './components/PointsEarningRulesCard';
 import type {
   ImpactPointAction,
   ImpactPointsDashboardResponse,
@@ -72,10 +73,10 @@ const ImpactPointsPage: React.FC<ImpactPointsPageProps> = ({ onBack }) => {
 
   return (
     <div className="min-h-screen bg-redoma-light pb-12">
-      <header className="bg-white border-b border-slate-100 px-6 py-4 sticky top-0 z-50 flex items-center justify-between">
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-slate-100 bg-white px-6 py-4">
         <button
           onClick={onBack}
-          className="p-2 -ml-2 hover:bg-slate-50 rounded-full transition-colors text-slate-600"
+          className="text-slate-600 -ml-2 rounded-full p-2 transition-colors hover:bg-slate-50"
         >
           <ArrowLeft size={20} />
         </button>
@@ -83,10 +84,10 @@ const ImpactPointsPage: React.FC<ImpactPointsPageProps> = ({ onBack }) => {
         <div className="w-9" />
       </header>
 
-      <main className="max-w-md mx-auto px-6 pt-8 space-y-8">
-          <section>
-          <div className="flex items-center gap-3 mb-2 flex-wrap">
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+      <main className="mx-auto max-w-md space-y-8 px-6 pt-8">
+        <section>
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl font-black tracking-tight text-slate-900">
               Impact Points
             </h1>
             <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.2em] text-amber-700">
@@ -94,19 +95,19 @@ const ImpactPointsPage: React.FC<ImpactPointsPageProps> = ({ onBack }) => {
             </span>
           </div>
 
-          <p className="text-sm text-slate-500 font-medium leading-relaxed">
+          <p className="text-sm font-medium leading-relaxed text-slate-500">
             Acompanhe seu impacto e veja quantos pontos você acumulou.
           </p>
         </section>
 
         {loading ? (
-          <div className="bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm flex items-center justify-center gap-3 text-slate-500">
+          <div className="flex items-center justify-center gap-3 rounded-[2rem] border border-slate-100 bg-white p-8 text-slate-500 shadow-sm">
             <Loader2 size={18} className="animate-spin" />
             <span>Carregando seus pontos...</span>
           </div>
         ) : error ? (
-          <div className="bg-white rounded-[2rem] border border-red-100 p-6 shadow-sm flex items-start gap-3 text-red-600">
-            <AlertCircle size={18} className="shrink-0 mt-0.5" />
+          <div className="flex items-start gap-3 rounded-[2rem] border border-red-100 bg-white p-6 text-red-600 shadow-sm">
+            <AlertCircle size={18} className="mt-0.5 shrink-0" />
             <span>{error}</span>
           </div>
         ) : (
@@ -118,13 +119,17 @@ const ImpactPointsPage: React.FC<ImpactPointsPageProps> = ({ onBack }) => {
               />
             </section>
 
+            <section>
+              <PointsEarningRulesCard />
+            </section>
+
             <section className="space-y-4">
               <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2 text-slate-800 font-bold">
+                <div className="flex items-center gap-2 font-bold text-slate-800">
                   <History size={18} className="text-redoma-steel" />
                   <h3 className="text-base">Histórico de acúmulo</h3>
                 </div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
                   {history.length} ações
                 </span>
               </div>
@@ -132,7 +137,7 @@ const ImpactPointsPage: React.FC<ImpactPointsPageProps> = ({ onBack }) => {
               {!hasPoints ? (
                 <PointsEmptyState />
               ) : (
-                <div className="bg-white rounded-[2rem] border border-slate-100 p-2 shadow-sm">
+                <div className="rounded-[2rem] border border-slate-100 bg-white p-2 shadow-sm">
                   <div className="divide-y divide-slate-50">
                     {history.map((action, index) => (
                       <motion.div
