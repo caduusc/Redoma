@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, History, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, History, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import Logo from '../../../components/Logo';
 import { supabasePublic } from '../../../lib/supabase';
@@ -23,6 +23,11 @@ const ImpactPointsPage: React.FC<ImpactPointsPageProps> = ({ onBack }) => {
   const [history, setHistory] = useState<ImpactPointAction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+
+  const PAGE_SIZE = 7;
+  const totalPages = Math.ceil(history.length / PAGE_SIZE);
+  const paginated = history.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   useEffect(() => {
     const fetchImpactPoints = async () => {
@@ -137,20 +142,48 @@ const ImpactPointsPage: React.FC<ImpactPointsPageProps> = ({ onBack }) => {
               {!hasPoints ? (
                 <PointsEmptyState />
               ) : (
-                <div className="rounded-[2rem] border border-slate-100 bg-white p-2 shadow-sm">
-                  <div className="divide-y divide-slate-50">
-                    {history.map((action, index) => (
-                      <motion.div
-                        key={action.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.06 }}
-                      >
-                        <PointsHistoryItem action={action} />
-                      </motion.div>
-                    ))}
+                <>
+                  <div className="rounded-[2rem] border border-slate-100 bg-white p-2 shadow-sm">
+                    <div className="divide-y divide-slate-50">
+                      {paginated.map((action, index) => (
+                        <motion.div
+                          key={action.id}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.06 }}
+                        >
+                          <PointsHistoryItem action={action} />
+                        </motion.div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between px-1 pt-2">
+                      <button
+                        onClick={() => setPage((p) => Math.max(0, p - 1))}
+                        disabled={page === 0}
+                        className="flex items-center gap-1 text-xs font-bold text-slate-500 disabled:opacity-30 hover:text-slate-800 transition-colors"
+                      >
+                        <ChevronLeft size={16} />
+                        Anterior
+                      </button>
+
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                        {page + 1} / {totalPages}
+                      </span>
+
+                      <button
+                        onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                        disabled={page === totalPages - 1}
+                        className="flex items-center gap-1 text-xs font-bold text-slate-500 disabled:opacity-30 hover:text-slate-800 transition-colors"
+                      >
+                        Próximo
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </section>
 
