@@ -408,7 +408,7 @@ const AdminProviders: React.FC = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px] text-slate-800"
                 />
               </div>
 
@@ -421,7 +421,7 @@ const AdminProviders: React.FC = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, type: e.target.value as any })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px] text-slate-800"
                 >
                   <option value="ecommerce">E-commerce</option>
                   <option value="service">Serviços</option>
@@ -441,7 +441,7 @@ const AdminProviders: React.FC = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, category: e.target.value })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px] text-slate-800"
                 />
               </div>
 
@@ -456,7 +456,7 @@ const AdminProviders: React.FC = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, description: e.target.value })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px] text-slate-800"
                 />
               </div>
 
@@ -475,7 +475,7 @@ const AdminProviders: React.FC = () => {
                       cashbackPercent: parseFloat(e.target.value || '0'),
                     })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px] text-slate-800"
                 />
               </div>
 
@@ -490,7 +490,7 @@ const AdminProviders: React.FC = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, link: e.target.value })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px] text-slate-800"
                 />
               </div>
 
@@ -509,7 +509,7 @@ const AdminProviders: React.FC = () => {
                       revenueShareText: e.target.value,
                     })
                   }
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px] text-slate-800"
                 />
               </div>
 

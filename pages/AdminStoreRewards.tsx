@@ -38,7 +38,7 @@ const emptyForm = (): StoreItemFormData => ({
 });
 
 const inputCls =
-  'w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px]';
+  'w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-redoma-steel focus:outline-none bg-slate-50/50 text-[16px] text-slate-800';
 
 const AdminStoreRewards: React.FC = () => {
   const { items, addItem, updateItem, deleteItem, toggleActive } = useStoreRewards();
