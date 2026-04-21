@@ -72,7 +72,7 @@ export function PointsEarningRulesCard() {
 
       <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
         <p className="text-sm leading-5 text-slate-500">
-          Resgates estarão disponíveis na <span className="font-semibold text-slate-700">Redoma Store</span>.
+          Resgates estão disponíveis na <span className="font-semibold text-slate-700">Redoma Store</span>.
         </p>
       </div>
     </section>
