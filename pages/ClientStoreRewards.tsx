@@ -243,11 +243,7 @@ const ClientStoreRewards: React.FC = () => {
                             <span className="font-bold">
                               Faltam {itemFeedback.deficit!.toLocaleString('pt-BR')} pontos
                             </span>{' '}
-                            (≈ R${' '}
-                            {(itemFeedback.deficit! / 100).toLocaleString('pt-BR', {
-                              minimumFractionDigits: 2,
-                            })}
-                            ) para resgatar este item.
+                            para resgatar este item.
                           </>
                         )}
                       </div>
