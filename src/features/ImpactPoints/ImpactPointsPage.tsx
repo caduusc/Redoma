@@ -6,7 +6,7 @@ import { supabasePublic } from '../../../lib/supabase';
 import { PointsBalanceCard } from './components/PointsBalanceCard';
 import { PointsHistoryItem } from './components/PointsHistoryItem';
 import { PointsEmptyState } from './components/PointsEmptyState';
-import { RewardsComingSoonCard } from './components/RewardsComingSoonCard';
+import { StoreEntryCard } from './components/StoreEntryCard';
 import { PointsEarningRulesCard } from './components/PointsEarningRulesCard';
 import type {
   ImpactPointAction,
@@ -155,7 +155,7 @@ const ImpactPointsPage: React.FC<ImpactPointsPageProps> = ({ onBack }) => {
             </section>
 
             <section className="pt-4">
-              <RewardsComingSoonCard />
+              <StoreEntryCard availablePoints={summary?.available_points || 0} />
             </section>
           </>
         )}

@@ -110,3 +110,18 @@ export interface Member {
   communityId: string;
   fullName: string;
 }
+
+export interface StoreItem {
+  id: string;
+  name: string;
+  brand: string;
+  description?: string | null;
+  image_url?: string | null;
+  value_brl: number;
+  required_points: number;
+  category?: string | null;
+  sort_order?: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

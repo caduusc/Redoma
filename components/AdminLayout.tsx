@@ -1,11 +1,11 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Settings, LayoutDashboard, Briefcase, Users } from 'lucide-react';
+import { LogOut, Settings, LayoutDashboard, Briefcase, Users, ShoppingBag } from 'lucide-react';
 import Logo from './Logo';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  activeTab: 'dashboard' | 'providers' | 'communities';
+  activeTab: 'dashboard' | 'providers' | 'communities' | 'store';
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab }) => {
@@ -64,6 +64,18 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab }) => {
             <Users size={18} />
             Gerenciar Comunidades
           </button>
+
+          <button
+            onClick={() => navigate('/admin/store')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
+              activeTab === 'store'
+                ? 'bg-white/10 text-white'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <ShoppingBag size={18} />
+            Redoma Store
+          </button>
         </nav>
 
         <div className="p-4 border-t border-white/5">
@@ -85,6 +97,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, activeTab }) => {
               ? 'Catálogo de Fornecedores'
               : activeTab === 'communities'
               ? 'Catálogo de Comunidades'
+              : activeTab === 'store'
+              ? 'Redoma Store'
               : 'Dashboard'}
           </h1>
 
