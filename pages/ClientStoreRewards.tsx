@@ -202,18 +202,10 @@ const ClientStoreRewards: React.FC = () => {
                     )}
 
                     {/* Valor */}
-                    <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">
+                    <div className="flex items-center mt-auto pt-2 border-t border-slate-100">
                       <div>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                          Valor
-                        </p>
-                        <p className="text-lg font-extrabold text-slate-800">
-                          R$ {item.value_brl.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                          Pontos
+                          Pontos necessários
                         </p>
                         <div className="flex items-center gap-1">
                           <Star size={14} className="text-amber-400" />
