@@ -268,7 +268,7 @@ const ClientStoreRewards: React.FC = () => {
 
         <footer className="mt-20 pt-8 border-t border-slate-200 text-center">
           <p className="text-slate-400 text-xs font-medium uppercase tracking-[0.2em]">
-            Redoma Store &copy; 2025 · 1 ponto = R$ 0,01
+            Redoma Store &copy; 2025
           </p>
         </footer>
       </main>
